@@ -34,8 +34,10 @@
         <div class="dropzone" id="dropzone" onclick="document.getElementById('csvInput').click()">
           <input type="file" id="csvInput" accept=".csv" onchange="handleFile(this.files[0])">
           <div class="dz-icon">&#128196;</div>
-          <div class="dz-text"><strong>Click to choose your CSV file</strong><br>or drag and drop it here</div>
-          <div class="dz-hint">Accepted format: .csv only &nbsp;&bull;&nbsp; Columns: Store, Region, Shrinkage, OpsScore, Fraud</div>
+          <div>
+            <div class="dz-text"><strong>Click to choose a CSV file</strong> &nbsp;or drag &amp; drop</div>
+            <div class="dz-hint">Columns: Store, Region, Shrinkage, OpsScore, Fraud</div>
+          </div>
         </div>
         <div class="upload-status" id="uploadStatus"></div>
         <div style="margin-top:10px">

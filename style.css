@@ -153,8 +153,8 @@ body {
 
 .upload-cols {
   display: grid;
-  grid-template-columns: 1fr 260px;
-  gap: 16px;
+  grid-template-columns: 1fr 240px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -166,8 +166,10 @@ body {
 .dropzone {
   border: 2px dashed #c0bfb8;
   border-radius: 8px;
-  padding: 28px 16px;
-  text-align: center;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
@@ -181,14 +183,14 @@ body {
 .dropzone input[type=file] { display: none; }
 
 .dz-icon {
-  font-size: 36px;
-  margin-bottom: 8px;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 
 .dz-text {
   font-size: 13px;
   color: #6b6b68;
-  line-height: 1.6;
+  line-height: 1.4;
 }
 
 .dz-text strong { color: #4a7fcb; }
@@ -196,7 +198,7 @@ body {
 .dz-hint {
   font-size: 11px;
   color: #9b9b98;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 /* Upload status */
