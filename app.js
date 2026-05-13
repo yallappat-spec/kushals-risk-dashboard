@@ -176,6 +176,7 @@ function clearData() {
   document.getElementById('clearBtn').style.display = 'none';
   document.getElementById('sheetClearBtn').style.display = 'none';
   localStorage.removeItem('sheetUrl');
+  history.replaceState(null, '', location.pathname);
   document.getElementById('uploadStatus').className = 'upload-status';
   document.getElementById('sheetStatus').className = 'upload-status';
   document.getElementById('sheetUrl').value = '';
@@ -265,6 +266,7 @@ async function loadFromGoogleSheet() {
     rebuildRegionFilter();
     applyFilters();
     localStorage.setItem('sheetUrl', raw);
+    history.replaceState(null, '', '?sheet=' + encodeURIComponent(raw));
     showSheetStatus('&#10003; ' + rows.length + ' stores loaded from Google Sheet', 'ok');
     document.getElementById('sheetClearBtn').style.display = 'inline-block';
     setDsStatus('Google Sheet · ' + rows.length + ' stores', true);
@@ -600,9 +602,10 @@ activeStores = SAMPLE.map(calcRisk);
 rebuildRegionFilter();
 applyFilters();
 
-/* Auto-load saved Google Sheet URL on page open */
+/* Auto-load on page open — URL param takes priority over localStorage */
 (function autoLoad() {
-  const saved = localStorage.getItem('sheetUrl');
+  const param = new URLSearchParams(location.search).get('sheet');
+  const saved = param ? decodeURIComponent(param) : localStorage.getItem('sheetUrl');
   if (!saved) return;
   document.getElementById('sheetUrl').value = saved;
   switchTab('sheet');
