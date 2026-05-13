@@ -65,11 +65,91 @@ body {
   margin-bottom: 16px;
 }
 
-.upload-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
+/* Upload tabs */
+.upload-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #e0dfd8;
+  padding-bottom: 0;
 }
+
+.utab {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  color: #6b6b68;
+  border-radius: 4px 4px 0 0;
+  transition: color 0.15s;
+}
+
+.utab:hover { color: #1a1a1a; }
+
+.utab.active {
+  color: #1a1a1a;
+  border-bottom-color: #4a7fcb;
+  font-weight: 600;
+}
+
+/* Google Sheet pane */
+.sheet-pane {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .sheet-pane { grid-template-columns: 1fr; }
+}
+
+.sheet-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.sheet-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sheet-url-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid #c0bfb8;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sheet-url-input:focus { border-color: #4a7fcb; }
+
+.btn-load {
+  padding: 8px 16px;
+  background: #2d6fcf;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-load:hover { background: #1e55a8; }
+.btn-load:disabled { background: #aaa; cursor: not-allowed; }
 
 .upload-cols {
   display: grid;

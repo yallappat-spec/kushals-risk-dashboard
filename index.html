@@ -21,9 +21,15 @@
 
   <!-- ===== UPLOAD SECTION ===== -->
   <div class="upload-section">
-    <div class="upload-title">&#8593; Upload your store data (CSV)</div>
-    <div class="upload-cols">
 
+    <!-- Tabs -->
+    <div class="upload-tabs">
+      <button class="utab active" id="tabCsv"   onclick="switchTab('csv')">&#128196; Upload CSV</button>
+      <button class="utab"        id="tabSheet" onclick="switchTab('sheet')">&#128218; Google Sheet</button>
+    </div>
+
+    <!-- CSV tab -->
+    <div id="paneCsv" class="upload-cols">
       <div>
         <div class="dropzone" id="dropzone" onclick="document.getElementById('csvInput').click()">
           <input type="file" id="csvInput" accept=".csv" onchange="handleFile(this.files[0])">
@@ -36,7 +42,6 @@
           <button class="btn-clr" id="clearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
         </div>
       </div>
-
       <div class="template-box">
         <h4>&#128203; How to prepare your CSV file</h4>
         <p>Open Excel, create these 5 column headers in row 1, then fill in your store data from row 2 onwards. Save as CSV.</p>
@@ -55,8 +60,41 @@
         </p>
         <button class="btn-dl" onclick="downloadTemplate()">&#8595; Download blank template CSV</button>
       </div>
-
     </div>
+
+    <!-- Google Sheet tab -->
+    <div id="paneSheet" class="sheet-pane" style="display:none">
+      <div class="sheet-left">
+        <div class="sheet-icon">&#128218;</div>
+        <h3 style="margin:0 0 6px">Connect your Google Sheet</h3>
+        <p style="margin:0 0 16px;color:#6b6b68;font-size:13px">Paste your Google Sheet link below. The dashboard will fetch the latest data every time you click Load.</p>
+        <div class="sheet-input-row">
+          <input type="url" id="sheetUrl" class="sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/..." />
+          <button class="btn-load" id="loadSheetBtn" onclick="loadFromGoogleSheet()">&#8595; Load Data</button>
+        </div>
+        <div class="upload-status" id="sheetStatus"></div>
+        <div style="margin-top:10px">
+          <button class="btn-clr" id="sheetClearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
+        </div>
+      </div>
+      <div class="template-box">
+        <h4>&#128196; How to share your Google Sheet</h4>
+        <ol style="padding-left:18px;margin:8px 0;font-size:13px;line-height:1.8">
+          <li>Open your Google Sheet</li>
+          <li>Click <strong>Share</strong> (top-right)</li>
+          <li>Set access to <strong>"Anyone with the link"</strong></li>
+          <li>Copy the link and paste it above</li>
+        </ol>
+        <p class="tpl-hint" style="margin-top:10px">
+          Make sure your sheet has the column headers:<br>
+          <strong>Store, Region, Shrinkage, OpsScore, Fraud</strong>
+        </p>
+        <p class="tpl-hint" style="color:#a05c00">
+          &#9888; Your sheet must be set to <strong>"Anyone with the link can view"</strong> for this to work.
+        </p>
+      </div>
+    </div>
+
   </div>
 
   <!-- ===== SCORING LEGEND ===== -->

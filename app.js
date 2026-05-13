@@ -136,9 +136,89 @@ function clearData() {
   activeStores = SAMPLE.map(calcRisk);
   document.getElementById('csvInput').value = '';
   document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('sheetClearBtn').style.display = 'none';
   document.getElementById('uploadStatus').className = 'upload-status';
+  document.getElementById('sheetStatus').className = 'upload-status';
+  document.getElementById('sheetUrl').value = '';
   rebuildRegionFilter();
   applyFilters();
+}
+
+/* ============================================================
+   TAB SWITCHING
+   ============================================================ */
+function switchTab(tab) {
+  document.getElementById('paneCsv').style.display   = tab === 'csv'   ? '' : 'none';
+  document.getElementById('paneSheet').style.display = tab === 'sheet' ? '' : 'none';
+  document.getElementById('tabCsv').classList.toggle('active',   tab === 'csv');
+  document.getElementById('tabSheet').classList.toggle('active', tab === 'sheet');
+}
+
+/* ============================================================
+   GOOGLE SHEET LOADER
+   ============================================================ */
+function toCSVExportUrl(input) {
+  input = input.trim();
+
+  /* Already a published CSV URL */
+  if (input.includes('/pub?') && input.includes('output=csv')) return input;
+  if (input.includes('/pub?') && input.includes('output=csv')) return input;
+
+  /* Published to web: /pub without output param */
+  if (input.includes('/pub?')) {
+    return input.includes('?') ? input + '&output=csv' : input + '?output=csv';
+  }
+
+  /* Regular sheet URL — extract sheet ID and optional gid */
+  const idMatch  = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  const gidMatch = input.match(/[#&?]gid=(\d+)/);
+  if (!idMatch) return null;
+
+  let url = `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv`;
+  if (gidMatch) url += `&gid=${gidMatch[1]}`;
+  return url;
+}
+
+function showSheetStatus(msg, type) {
+  const el = document.getElementById('sheetStatus');
+  el.innerHTML = msg;
+  el.className = 'upload-status ' + type;
+}
+
+async function loadFromGoogleSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) {
+    showSheetStatus('Please paste your Google Sheet link first.', 'err');
+    return;
+  }
+
+  const csvUrl = toCSVExportUrl(raw);
+  if (!csvUrl) {
+    showSheetStatus('&#10007; That doesn\'t look like a valid Google Sheet URL. Please check and try again.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('loadSheetBtn');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  showSheetStatus('Fetching data from Google Sheet…', '');
+
+  try {
+    const res = await fetch(csvUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status + '. Make sure the sheet is shared as "Anyone with the link can view".');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    activeStores = rows.map(calcRisk);
+    rebuildRegionFilter();
+    applyFilters();
+    showSheetStatus('&#10003; ' + rows.length + ' stores loaded from Google Sheet', 'ok');
+    document.getElementById('sheetClearBtn').style.display = 'inline-block';
+  } catch (err) {
+    showSheetStatus('&#10007; ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↓ Load Data';
+  }
 }
 
 /* ============================================================
