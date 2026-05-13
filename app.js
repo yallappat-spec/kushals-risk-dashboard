@@ -57,6 +57,30 @@ function handleFile(file) {
   reader.readAsText(file);
 }
 
+/* Maps 3-letter store code prefix to city name */
+function storeCodeToRegion(storeName) {
+  const code = storeName.split(/\s*-\s*/)[0].trim().toUpperCase();
+  const map = {
+    'AHM': 'Ahmedabad',    'ATP': 'Anantapur',     'BGM': 'Belgaum',
+    'BIM': 'Bijapur',      'BLR': 'Bangalore',     'BPL': 'Bhopal',
+    'CBT': 'Coimbatore',   'CDR': 'Chandigarh',    'CHN': 'Chennai',
+    'DEL': 'Delhi',        'ERD': 'Erode',          'GTR': 'Guntur',
+    'GUR': 'Gurugram',     'GWT': 'Guwahati',       'HBL': 'Hubli',
+    'HOS': 'Hosur',        'HSP': 'Hospet',         'HYD': 'Hyderabad',
+    'IDR': 'Indore',       'KCH': 'Kochi',          'KHM': 'Khammam',
+    'KKN': 'Kurnool',      'KPR': 'Kolhapur',       'KRL': 'Karimnagar',
+    'KRM': 'Karimnagar',   'LUK': 'Lucknow',        'MDR': 'Madurai',
+    'MGL': 'Mangalore',    'MUM': 'Mumbai',          'MYS': 'Mysore',
+    'NLR': 'Nellore',      'NZM': 'Nizamabad',       'ONG': 'Ongole',
+    'PDC': 'Pondicherry',  'PUN': 'Pune',            'RJM': 'Rajahmundry',
+    'SLM': 'Salem',        'TIR': 'Tirupur',         'TPL': 'Tiruppur',
+    'TRP': 'Tirupati',     'TRV': 'Trivandrum',      'UDP': 'Udupi',
+    'VIG': 'Visakhapatnam','VJN': 'Vijayawada',      'VJW': 'Vijayawada',
+    'WRL': 'Warangal',
+  };
+  return map[code] || code;
+}
+
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error('File needs a header row and at least one data row.');
@@ -73,16 +97,16 @@ function parseCSV(text) {
 
   const iStore  = col(['store', 'storename']);
   const iRegion = col(['region']);
-  const iShrink = col(['shrinkage', 'shrinkage%', 'shrinkagepct']);
+  /* Accept "Shrinakge" typo from real sheet alongside correct spelling */
+  const iShrink = col(['shrinkage', 'shrinkage%', 'shrinkagepct', 'shrinakge', 'shrinakge%']);
   const iOps    = col(['opsscore', 'opscore', 'operationsscore', 'operationscore', 'operationscorecard', 'opsscore%']);
-  const iFraud  = col(['fraud']);
+  /* Accept "Fraud Red flags" column from real sheet */
+  const iFraud  = col(['fraud', 'fraudredflags', 'fraudredflag', 'fraudredflag(s)']);
 
   const missing = [
     ['Store',    iStore],
-    ['Region',   iRegion],
-    ['Shrinkage', iShrink],
-    ['OpsScore', iOps],
-    ['Fraud',    iFraud],
+    ['Shrinkage / Shrinakge', iShrink],
+    ['OpsScore / Operation Scorecard', iOps],
   ].filter(([, v]) => v === -1).map(([k]) => k);
 
   if (missing.length) {
@@ -96,28 +120,32 @@ function parseCSV(text) {
 
     const shRaw = c[iShrink].replace(/\s/g, '');
     const opRaw = c[iOps].replace(/\s/g, '');
-    const shNum = parseFloat(shRaw.replace('%', ''));
+
+    /* Skip rows where Ops Score is missing — can't calculate risk */
+    if (!opRaw || opRaw === '-') continue;
     const opNum = parseFloat(opRaw.replace('%', ''));
-    if (isNaN(shNum) || isNaN(opNum)) continue;
+    if (isNaN(opNum)) continue;
 
-    /* Shrinkage: store as % number (e.g. -0.110% → stored as -0.110)
-       If no % sign and value is tiny decimal, multiply by 100 */
-    const shrinkage = shRaw.includes('%')
-      ? shNum
-      : (Math.abs(shNum) < 0.01 ? shNum * 100 : shNum);
+    /* Treat missing shrinkage as 0 (no shrinkage risk) */
+    const shNum = (!shRaw || shRaw === '-') ? 0 : parseFloat(shRaw.replace('%', ''));
+    if (isNaN(shNum)) continue;
 
-    /* OpsScore: always store as 0–100 */
-    const opsScore = opRaw.includes('%')
-      ? opNum
-      : (opNum <= 1 ? opNum * 100 : opNum);
+    const shrinkage = (!shRaw || shRaw === '-') ? 0 :
+      shRaw.includes('%') ? shNum : (Math.abs(shNum) < 0.01 ? shNum * 100 : shNum);
 
-    rows.push({
-      store:     c[iStore]  || 'Store ' + i,
-      region:    c[iRegion] || 'Other',
-      shrinkage: shrinkage,
-      opsScore:  opsScore,
-      fraud:     ['yes', 'true', '1'].includes((c[iFraud] || '').toLowerCase()),
-    });
+    const opsScore = opRaw.includes('%') ? opNum : (opNum <= 1 ? opNum * 100 : opNum);
+
+    const storeName = c[iStore] || 'Store ' + i;
+    /* Use Region column if present, otherwise derive from store code prefix */
+    const region = (iRegion !== -1 && c[iRegion] && c[iRegion] !== '-')
+      ? c[iRegion]
+      : storeCodeToRegion(storeName);
+
+    const fraudRaw = (iFraud !== -1 ? c[iFraud] || '' : '').trim().toLowerCase();
+    /* Treat empty / "-" / "no" as no fraud; any other value (Yes, flag, etc.) as fraud */
+    const fraud = fraudRaw !== '' && fraudRaw !== '-' && fraudRaw !== 'no' && fraudRaw !== 'false' && fraudRaw !== '0';
+
+    rows.push({ store: storeName, region, shrinkage, opsScore, fraud });
   }
 
   if (!rows.length) {
