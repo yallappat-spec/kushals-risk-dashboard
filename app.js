@@ -170,6 +170,7 @@ function showStatus(msg, type) {
 
 function clearData() {
   stopAutoRefresh();
+  setDsStatus('Sample data', false);
   activeStores = SAMPLE.map(calcRisk);
   document.getElementById('csvInput').value = '';
   document.getElementById('clearBtn').style.display = 'none';
@@ -180,6 +181,20 @@ function clearData() {
   document.getElementById('sheetUrl').value = '';
   rebuildFilters();
   applyFilters();
+}
+
+/* ============================================================
+   DATA PANEL TOGGLE & STATUS BAR
+   ============================================================ */
+function toggleDataPanel() {
+  const panel = document.getElementById('uploadPanel');
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+}
+
+function setDsStatus(text, connected) {
+  document.getElementById('dsStatusText').textContent = text;
+  const dot = document.getElementById('dsStatusDot');
+  dot.className = 'ds-dot ' + (connected ? 'ds-dot-green' : 'ds-dot-grey');
 }
 
 /* ============================================================
@@ -252,6 +267,8 @@ async function loadFromGoogleSheet() {
     localStorage.setItem('sheetUrl', raw);
     showSheetStatus('&#10003; ' + rows.length + ' stores loaded from Google Sheet', 'ok');
     document.getElementById('sheetClearBtn').style.display = 'inline-block';
+    setDsStatus('Google Sheet · ' + rows.length + ' stores', true);
+    document.getElementById('uploadPanel').style.display = 'none';
     startAutoRefresh();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
@@ -528,6 +545,7 @@ function startAutoRefresh() {
       rebuildFilters();
       applyFilters();
       const now = new Date().toLocaleTimeString();
+      setDsStatus('Google Sheet · ' + rows.length + ' stores · refreshed ' + now, true);
       showSheetStatus('&#10003; Auto-refreshed at ' + now, 'ok');
     } catch (_) { /* silently skip failed auto-refresh */ }
   }, AUTO_REFRESH_MS);

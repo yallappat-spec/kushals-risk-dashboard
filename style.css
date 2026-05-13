@@ -56,6 +56,50 @@ body {
   align-self: center;
 }
 
+/* --- Data Source Bar --- */
+.ds-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.ds-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ds-dot-grey  { background: #aaa; }
+.ds-dot-green { background: #4caf50; }
+
+.ds-edit-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid #c0bfb8;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #444;
+}
+
+.ds-edit-btn:hover { background: #f0f0ee; }
+
+.ds-close-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.ds-close-btn:hover { color: #333; }
+
 /* --- Upload Section --- */
 .upload-section {
   background: #fff;
@@ -63,7 +107,7 @@ body {
   border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 16px;
-  max-width: 420px;
+  max-width: 480px;
   margin-left: auto;
 }
 

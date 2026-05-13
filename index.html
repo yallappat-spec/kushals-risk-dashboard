@@ -19,13 +19,21 @@
     <div class="db-badge">Max risk score: 80%</div>
   </div>
 
-  <!-- ===== UPLOAD SECTION ===== -->
-  <div class="upload-section">
+  <!-- ===== DATA SOURCE BAR ===== -->
+  <div class="ds-bar">
+    <span id="dsStatusDot" class="ds-dot ds-dot-grey"></span>
+    <span id="dsStatusText" style="font-size:12px;color:#6b6b68">Sample data</span>
+    <span id="refreshBadge" class="refresh-badge"></span>
+    <button class="ds-edit-btn" onclick="toggleDataPanel()">&#9881; Data source</button>
+  </div>
 
-    <!-- Tabs -->
+  <!-- ===== UPLOAD PANEL (collapsible) ===== -->
+  <div class="upload-section" id="uploadPanel" style="display:none">
+
     <div class="upload-tabs">
       <button class="utab active" id="tabCsv"   onclick="switchTab('csv')">&#128196; Upload CSV</button>
       <button class="utab"        id="tabSheet" onclick="switchTab('sheet')">&#128218; Google Sheet</button>
+      <button class="ds-close-btn" onclick="toggleDataPanel()">&#10005;</button>
     </div>
 
     <!-- CSV tab -->
@@ -40,38 +48,21 @@
           </div>
         </div>
         <div class="upload-status" id="uploadStatus"></div>
-        <div style="margin-top:10px">
+        <div style="margin-top:8px">
           <button class="btn-clr" id="clearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
         </div>
       </div>
     </div>
 
     <!-- Google Sheet tab -->
-    <div id="paneSheet" class="sheet-pane" style="display:none">
-      <div class="sheet-left">
-        <div class="sheet-icon">&#128218;</div>
-        <h3 style="margin:0 0 6px">Connect your Google Sheet</h3>
-        <p style="margin:0 0 16px;color:#6b6b68;font-size:13px">Paste your Google Sheet link below. The dashboard will fetch the latest data every time you click Load.</p>
-        <div class="sheet-input-row">
-          <input type="url" id="sheetUrl" class="sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/..." />
-          <button class="btn-load" id="loadSheetBtn" onclick="loadFromGoogleSheet()">&#8595; Load Data</button>
-        </div>
-        <div class="upload-status" id="sheetStatus"></div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <button class="btn-clr" id="sheetClearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
-          <span id="refreshBadge" class="refresh-badge"></span>
-        </div>
+    <div id="paneSheet" style="display:none">
+      <div class="sheet-input-row">
+        <input type="url" id="sheetUrl" class="sheet-url-input" placeholder="Paste your Google Sheet link here..." />
+        <button class="btn-load" id="loadSheetBtn" onclick="loadFromGoogleSheet()">&#8595; Load Data</button>
       </div>
-      <div class="template-box">
-        <h4>&#128196; How to share</h4>
-        <ol style="padding-left:16px;margin:6px 0;font-size:11px;line-height:1.8">
-          <li>Click <strong>Share</strong> in your sheet</li>
-          <li>Set to <strong>"Anyone with the link"</strong></li>
-          <li>Copy &amp; paste the link above</li>
-        </ol>
-        <p class="tpl-hint" style="color:#a05c00;margin-top:8px">
-          &#9888; Must be <strong>"Anyone with the link can view"</strong>
-        </p>
+      <div class="upload-status" id="sheetStatus"></div>
+      <div style="margin-top:8px">
+        <button class="btn-clr" id="sheetClearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
       </div>
     </div>
 
