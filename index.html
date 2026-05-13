@@ -69,8 +69,9 @@
           <button class="btn-load" id="loadSheetBtn" onclick="loadFromGoogleSheet()">&#8595; Load Data</button>
         </div>
         <div class="upload-status" id="sheetStatus"></div>
-        <div style="margin-top:10px">
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <button class="btn-clr" id="sheetClearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
+          <span id="refreshBadge" class="refresh-badge"></span>
         </div>
       </div>
       <div class="template-box">

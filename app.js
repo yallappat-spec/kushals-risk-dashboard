@@ -169,6 +169,7 @@ function showStatus(msg, type) {
 }
 
 function clearData() {
+  stopAutoRefresh();
   activeStores = SAMPLE.map(calcRisk);
   document.getElementById('csvInput').value = '';
   document.getElementById('clearBtn').style.display = 'none';
@@ -249,6 +250,7 @@ async function loadFromGoogleSheet() {
     applyFilters();
     showSheetStatus('&#10003; ' + rows.length + ' stores loaded from Google Sheet', 'ok');
     document.getElementById('sheetClearBtn').style.display = 'inline-block';
+    startAutoRefresh();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
   } finally {
@@ -500,6 +502,46 @@ function renderCharts(data) {
       plugins: { legend: { display: false } },
     },
   });
+}
+
+/* ============================================================
+   AUTO-REFRESH — re-fetches Google Sheet every 5 minutes
+   ============================================================ */
+let autoRefreshTimer = null;
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(async () => {
+    const url = document.getElementById('sheetUrl').value.trim();
+    if (!url) return;
+    const csvUrl = toCSVExportUrl(url);
+    if (!csvUrl) return;
+    try {
+      const res = await fetch(csvUrl);
+      if (!res.ok) return;
+      const text = await res.text();
+      const rows = parseCSV(text);
+      activeStores = rows.map(calcRisk);
+      rebuildFilters();
+      applyFilters();
+      const now = new Date().toLocaleTimeString();
+      showSheetStatus('&#10003; Auto-refreshed at ' + now, 'ok');
+    } catch (_) { /* silently skip failed auto-refresh */ }
+  }, AUTO_REFRESH_MS);
+  updateRefreshBadge(true);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+  updateRefreshBadge(false);
+}
+
+function updateRefreshBadge(active) {
+  const badge = document.getElementById('refreshBadge');
+  if (!badge) return;
+  badge.textContent = active ? '&#128257; Auto-refresh ON (5 min)' : '';
+  badge.innerHTML   = active ? '&#128257; Auto-refresh ON (5 min)' : '';
 }
 
 /* ============================================================

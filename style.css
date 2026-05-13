@@ -151,6 +151,18 @@ body {
 .btn-load:hover { background: #1e55a8; }
 .btn-load:disabled { background: #aaa; cursor: not-allowed; }
 
+.refresh-badge {
+  font-size: 11px;
+  color: #2a6f2a;
+  background: #e8f4e0;
+  border: 1px solid #b2d9a0;
+  border-radius: 20px;
+  padding: 3px 10px;
+  display: none;
+}
+
+.refresh-badge:not(:empty) { display: inline-block; }
+
 .upload-cols {
   display: grid;
   grid-template-columns: 1fr 240px;
