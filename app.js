@@ -279,6 +279,35 @@ async function loadFromGoogleSheet() {
 }
 
 /* ============================================================
+   EXPORT CSV — exports current filtered data
+   ============================================================ */
+function exportCSV() {
+  const data = getFiltered();
+  if (!data.length) return;
+
+  const headers = ['Store Name','Region','CM Name','RM Name','Month','Shrinkage %','Operation Scorecard','Fraud Red Flags','Risk Level','Risk Score'];
+  const rows = data.map(s => [
+    s.store,
+    s.region,
+    s.cm    || '-',
+    s.rm    || '-',
+    s.month || '-',
+    s.pending ? '-' : s.shrinkage.toFixed(3) + '%',
+    s.pending ? '-' : s.opsScore + '%',
+    s.fraud ? 'Yes' : 'No',
+    s.level,
+    s.pending ? '-' : s.total + '%',
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_risk_' + date + '.csv';
+  a.click();
+}
+
+/* ============================================================
    TEMPLATE DOWNLOAD
    ============================================================ */
 function downloadTemplate() {

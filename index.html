@@ -134,7 +134,10 @@
   <!-- ===== TABLE ===== -->
   <div class="sec-hdr">
     <div class="sec-title">Store-level risk register</div>
-    <div class="sec-count" id="storeCount"></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="sec-count" id="storeCount"></div>
+      <button class="btn-export" onclick="exportCSV()">&#8595; Export CSV</button>
+    </div>
   </div>
   <div class="tbl-wrap">
     <table>
