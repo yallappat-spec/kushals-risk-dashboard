@@ -61,15 +61,17 @@ body {
   background: #fff;
   border: 1px solid #e0dfd8;
   border-radius: 8px;
-  padding: 16px;
+  padding: 10px 14px;
   margin-bottom: 16px;
+  max-width: 420px;
+  margin-left: auto;
 }
 
 /* Upload tabs */
 .upload-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   border-bottom: 2px solid #e0dfd8;
   padding-bottom: 0;
 }
