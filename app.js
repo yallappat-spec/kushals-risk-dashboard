@@ -174,6 +174,7 @@ function clearData() {
   document.getElementById('csvInput').value = '';
   document.getElementById('clearBtn').style.display = 'none';
   document.getElementById('sheetClearBtn').style.display = 'none';
+  localStorage.removeItem('sheetUrl');
   document.getElementById('uploadStatus').className = 'upload-status';
   document.getElementById('sheetStatus').className = 'upload-status';
   document.getElementById('sheetUrl').value = '';
@@ -248,6 +249,7 @@ async function loadFromGoogleSheet() {
     activeStores = rows.map(calcRisk);
     rebuildRegionFilter();
     applyFilters();
+    localStorage.setItem('sheetUrl', raw);
     showSheetStatus('&#10003; ' + rows.length + ' stores loaded from Google Sheet', 'ok');
     document.getElementById('sheetClearBtn').style.display = 'inline-block';
     startAutoRefresh();
@@ -550,3 +552,12 @@ function updateRefreshBadge(active) {
 activeStores = SAMPLE.map(calcRisk);
 rebuildRegionFilter();
 applyFilters();
+
+/* Auto-load saved Google Sheet URL on page open */
+(function autoLoad() {
+  const saved = localStorage.getItem('sheetUrl');
+  if (!saved) return;
+  document.getElementById('sheetUrl').value = saved;
+  switchTab('sheet');
+  loadFromGoogleSheet();
+})();
