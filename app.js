@@ -1,0 +1,374 @@
+/* =============================================
+   KUSHALS STORE RISK DASHBOARD — app.js
+   All dashboard logic: risk scoring, CSV
+   parsing, filters, charts, table rendering
+   ============================================= */
+
+/* ---- State ---- */
+let activeStores = [];
+let bChart = null;
+let pChart = null;
+
+/* ============================================================
+   RISK SCORING
+   Rules defined by Yallappa Tenkappanavar — Loss Prevention
+   
+   Shrinkage > 0.075%     → +30 pts
+   Ops score 80–89%       → +20 pts
+   Ops score < 80%        → +30 pts
+   Ops score >= 90%       → +0  pts
+   Fraud occurred         → +20 pts
+   
+   Total >= 50  → High
+   Total >= 20  → Medium
+   Total <  20  → Low
+   ============================================================ */
+function calcRisk(s) {
+  const shrinkPts = s.shrinkage < -0.075 ? 30 : 0;
+  const opsPts    = s.opsScore >= 90 ? 0 : s.opsScore >= 80 ? 20 : 30;
+  const fraudPts  = s.fraud ? 20 : 0;
+  const total     = shrinkPts + opsPts + fraudPts;
+  const level     = total >= 50 ? 'High' : total >= 20 ? 'Medium' : 'Low';
+  return { ...s, shrinkPts, opsPts, fraudPts, total, level };
+}
+
+/* ============================================================
+   CSV FILE UPLOAD
+   ============================================================ */
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    showStatus('Please upload a .csv file only.', 'err');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const rows = parseCSV(e.target.result);
+      activeStores = rows.map(calcRisk);
+      rebuildRegionFilter();
+      applyFilters();
+      showStatus('&#10003; ' + rows.length + ' stores loaded from ' + file.name, 'ok');
+      document.getElementById('clearBtn').style.display = 'inline-block';
+    } catch (err) {
+      showStatus('&#10007; ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error('File needs a header row and at least one data row.');
+
+  const hdrs = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s%]/g, ''));
+
+  function col(names) {
+    for (const n of names) {
+      const i = hdrs.indexOf(n);
+      if (i !== -1) return i;
+    }
+    return -1;
+  }
+
+  const iStore  = col(['store', 'storename']);
+  const iRegion = col(['region']);
+  const iShrink = col(['shrinkage', 'shrinkage%', 'shrinkagepct']);
+  const iOps    = col(['opsscore', 'opscore', 'operationsscore', 'operationscore', 'operationscorecard', 'opsscore%']);
+  const iFraud  = col(['fraud']);
+
+  const missing = [
+    ['Store',    iStore],
+    ['Region',   iRegion],
+    ['Shrinkage', iShrink],
+    ['OpsScore', iOps],
+    ['Fraud',    iFraud],
+  ].filter(([, v]) => v === -1).map(([k]) => k);
+
+  if (missing.length) {
+    throw new Error('Column(s) not found: ' + missing.join(', ') + '. Please check header names match the template.');
+  }
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(',').map(x => x.trim());
+    if (c.length < 3) continue;
+
+    const shRaw = c[iShrink].replace(/\s/g, '');
+    const opRaw = c[iOps].replace(/\s/g, '');
+    const shNum = parseFloat(shRaw.replace('%', ''));
+    const opNum = parseFloat(opRaw.replace('%', ''));
+    if (isNaN(shNum) || isNaN(opNum)) continue;
+
+    /* Shrinkage: store as % number (e.g. -0.110% → stored as -0.110)
+       If no % sign and value is tiny decimal, multiply by 100 */
+    const shrinkage = shRaw.includes('%')
+      ? shNum
+      : (Math.abs(shNum) < 0.01 ? shNum * 100 : shNum);
+
+    /* OpsScore: always store as 0–100 */
+    const opsScore = opRaw.includes('%')
+      ? opNum
+      : (opNum <= 1 ? opNum * 100 : opNum);
+
+    rows.push({
+      store:     c[iStore]  || 'Store ' + i,
+      region:    c[iRegion] || 'Other',
+      shrinkage: shrinkage,
+      opsScore:  opsScore,
+      fraud:     ['yes', 'true', '1'].includes((c[iFraud] || '').toLowerCase()),
+    });
+  }
+
+  if (!rows.length) {
+    throw new Error('No valid data rows found. Check Shrinkage and OpsScore columns contain numbers.');
+  }
+  return rows;
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('uploadStatus');
+  el.innerHTML = msg;
+  el.className = 'upload-status ' + type;
+}
+
+function clearData() {
+  activeStores = SAMPLE.map(calcRisk);
+  document.getElementById('csvInput').value = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('uploadStatus').className = 'upload-status';
+  rebuildRegionFilter();
+  applyFilters();
+}
+
+/* ============================================================
+   TEMPLATE DOWNLOAD
+   ============================================================ */
+function downloadTemplate() {
+  const csv = [
+    'Store,Region,Shrinkage,OpsScore,Fraud',
+    'Store Name 1,Bangalore,-0.082%,85%,No',
+    'Store Name 2,Hyderabad,-0.091%,72%,Yes',
+    'Store Name 3,Chennai,-0.045%,93%,No',
+    'Store Name 4,Mumbai,-0.031%,90%,No',
+    'Store Name 5,Kerala,-0.078%,78%,Yes',
+  ].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_risk_template.csv';
+  a.click();
+}
+
+/* ============================================================
+   DRAG & DROP
+   ============================================================ */
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+/* ============================================================
+   REGION FILTER — rebuilds dropdown from loaded data
+   ============================================================ */
+function rebuildRegionFilter() {
+  const regions = [...new Set(activeStores.map(s => s.region))].sort();
+  const sel = document.getElementById('regionFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">All regions</option>' +
+    regions.map(r => `<option value="${r}">${r}</option>`).join('');
+  if (regions.includes(cur)) sel.value = cur;
+}
+
+/* ============================================================
+   FILTERS & SORTING
+   ============================================================ */
+function getFiltered() {
+  const reg  = document.getElementById('regionFilter').value;
+  const risk = document.getElementById('riskFilter').value;
+  const sort = document.getElementById('sortFilter').value;
+
+  let data = activeStores.filter(s =>
+    (reg  === 'all' || s.region === reg) &&
+    (risk === 'all' || s.level  === risk)
+  );
+
+  if      (sort === 'risk')      data.sort((a, b) => b.total - a.total);
+  else if (sort === 'shrinkage') data.sort((a, b) => a.shrinkage - b.shrinkage);
+  else if (sort === 'opsScore')  data.sort((a, b) => a.opsScore - b.opsScore);
+  else                           data.sort((a, b) => a.store.localeCompare(b.store));
+
+  return data;
+}
+
+function applyFilters() {
+  const data = getFiltered();
+  renderKPIs(data);
+  renderTable(data);
+  renderCharts(data);
+}
+
+/* ============================================================
+   RENDER — KPI CARDS
+   ============================================================ */
+function renderKPIs(data) {
+  const n  = data.length || 1;
+  const h  = data.filter(s => s.level === 'High').length;
+  const m  = data.filter(s => s.level === 'Medium').length;
+  const l  = data.filter(s => s.level === 'Low').length;
+  const sr = data.filter(s => s.shrinkPts > 0).length;
+  const fr = data.filter(s => s.fraud).length;
+  const ow = data.filter(s => s.opsPts > 0).length;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Stores in view</div>
+      <div class="kpi-val">${data.length}</div>
+      <div class="kpi-sub">filtered selection</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">High risk</div>
+      <div class="kpi-val cr">${h}</div>
+      <div class="kpi-sub cr">${Math.round(h / n * 100)}% of stores</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Medium risk</div>
+      <div class="kpi-val ca">${m}</div>
+      <div class="kpi-sub" style="color:#6b6b68">${Math.round(m / n * 100)}% of stores</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Low risk</div>
+      <div class="kpi-val cg">${l}</div>
+      <div class="kpi-sub" style="color:#6b6b68">${Math.round(l / n * 100)}% of stores</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Shrinkage risk</div>
+      <div class="kpi-val cr">${sr}</div>
+      <div class="kpi-sub" style="color:#6b6b68">stores &gt; 0.075%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Fraud cases</div>
+      <div class="kpi-val ${fr > 5 ? 'cr' : fr > 2 ? 'ca' : 'cg'}">${fr}</div>
+      <div class="kpi-sub" style="color:#6b6b68">stores affected</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Ops below 90%</div>
+      <div class="kpi-val ${ow > 10 ? 'cr' : ow > 5 ? 'ca' : 'cg'}">${ow}</div>
+      <div class="kpi-sub" style="color:#6b6b68">need attention</div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   RENDER — STORE TABLE
+   ============================================================ */
+function renderTable(data) {
+  document.getElementById('storeCount').textContent = data.length + ' stores';
+
+  if (!data.length) {
+    document.getElementById('storeBody').innerHTML =
+      '<tr><td colspan="7"><div class="empty">No stores match the selected filters.</div></td></tr>';
+    return;
+  }
+
+  document.getElementById('storeBody').innerHTML = data.map(s => {
+    const badge = s.level === 'High' ? 'rh' : s.level === 'Medium' ? 'rm' : 'rl';
+    const sh    = s.shrinkage.toFixed(3);
+    const shC   = s.shrinkPts > 0 ? '#a32d2d' : '#2a5c14';
+    const opC   = s.opsPts === 30 ? '#a32d2d' : s.opsPts === 20 ? '#854f0b' : '#2a5c14';
+    const parts = [
+      s.shrinkPts > 0 ? 'S:+' + s.shrinkPts + '%' : '',
+      s.opsPts    > 0 ? 'O:+' + s.opsPts    + '%' : '',
+      s.fraudPts  > 0 ? 'F:+' + s.fraudPts  + '%' : '',
+    ].filter(Boolean).join(' ') || 'no risk';
+
+    return `<tr>
+      <td style="font-weight:600">${s.store}</td>
+      <td style="color:#6b6b68">${s.region}</td>
+      <td style="color:${shC};font-weight:600">${sh}%${s.shrinkPts > 0 ? ' &#9650;' : ''}</td>
+      <td style="color:${opC};font-weight:600">${s.opsScore}%</td>
+      <td style="color:${s.fraud ? '#a32d2d' : '#2a5c14'};font-weight:600">${s.fraud ? 'Yes' : 'No'}</td>
+      <td><span class="rb ${badge}">${s.level}</span></td>
+      <td style="font-weight:600">${s.total}%<span class="bkd">(${parts})</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ============================================================
+   RENDER — CHARTS
+   ============================================================ */
+function renderCharts(data) {
+  const top10     = [...data].sort((a, b) => b.total - a.total).slice(0, 10);
+  const barColors = top10.map(s =>
+    s.level === 'High' ? '#e24b4a' : s.level === 'Medium' ? '#ef9f27' : '#639922'
+  );
+  const h     = data.filter(s => s.level === 'High').length;
+  const m     = data.filter(s => s.level === 'Medium').length;
+  const l     = data.filter(s => s.level === 'Low').length;
+  const total = data.length || 1;
+
+  if (bChart) { bChart.destroy(); bChart = null; }
+  if (pChart) { pChart.destroy(); pChart = null; }
+
+  bChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: top10.map(s => s.store),
+      datasets: [{
+        label: 'Risk %',
+        data: top10.map(s => s.total),
+        backgroundColor: barColors,
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          min: 0,
+          max: 80,
+          ticks: { callback: v => v + '%', font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.06)' },
+        },
+        y: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+
+  document.getElementById('pieLegend').innerHTML = `
+    <span><span class="ld" style="background:#e24b4a"></span>High ${h} (${Math.round(h / total * 100)}%)</span>
+    <span><span class="ld" style="background:#ef9f27"></span>Medium ${m} (${Math.round(m / total * 100)}%)</span>
+    <span><span class="ld" style="background:#639922"></span>Low ${l} (${Math.round(l / total * 100)}%)</span>
+  `;
+
+  pChart = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['High', 'Medium', 'Low'],
+      datasets: [{
+        data: [h, m, l],
+        backgroundColor: ['#e24b4a', '#ef9f27', '#639922'],
+        borderWidth: 3,
+        borderColor: '#fff',
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+/* ============================================================
+   INITIALISE — runs when page loads
+   ============================================================ */
+activeStores = SAMPLE.map(calcRisk);
+rebuildRegionFilter();
+applyFilters();

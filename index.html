@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kushals Store Risk Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+</head>
+<body>
+<div class="page">
+
+  <!-- ===== HEADER ===== -->
+  <div class="db-header">
+    <div>
+      <div class="db-title">&#9888; Store Risk Dashboard</div>
+      <div class="db-sub">Kushals Fashion Jewellery &nbsp;&bull;&nbsp; Combined Risk View &nbsp;&bull;&nbsp; FY 2025-26</div>
+    </div>
+    <div class="db-badge">Max risk score: 80%</div>
+  </div>
+
+  <!-- ===== UPLOAD SECTION ===== -->
+  <div class="upload-section">
+    <div class="upload-title">&#8593; Upload your store data (CSV)</div>
+    <div class="upload-cols">
+
+      <div>
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('csvInput').click()">
+          <input type="file" id="csvInput" accept=".csv" onchange="handleFile(this.files[0])">
+          <div class="dz-icon">&#128196;</div>
+          <div class="dz-text"><strong>Click to choose your CSV file</strong><br>or drag and drop it here</div>
+          <div class="dz-hint">Accepted format: .csv only &nbsp;&bull;&nbsp; Columns: Store, Region, Shrinkage, OpsScore, Fraud</div>
+        </div>
+        <div class="upload-status" id="uploadStatus"></div>
+        <div style="margin-top:10px">
+          <button class="btn-clr" id="clearBtn" onclick="clearData()" style="display:none">&#10005; Clear &amp; reload sample data</button>
+        </div>
+      </div>
+
+      <div class="template-box">
+        <h4>&#128203; How to prepare your CSV file</h4>
+        <p>Open Excel, create these 5 column headers in row 1, then fill in your store data from row 2 onwards. Save as CSV.</p>
+        <table class="tpl-table">
+          <thead><tr><th>Store</th><th>Region</th><th>Shrinkage</th><th>OpsScore</th><th>Fraud</th></tr></thead>
+          <tbody>
+            <tr><td>Koramangala</td><td>Bangalore</td><td>-0.092%</td><td>74%</td><td>Yes</td></tr>
+            <tr><td>T Nagar</td><td>Chennai</td><td>-0.045%</td><td>91%</td><td>No</td></tr>
+            <tr><td>Andheri</td><td>Mumbai</td><td>-0.088%</td><td>72%</td><td>Yes</td></tr>
+          </tbody>
+        </table>
+        <p class="tpl-hint">
+          <strong>Shrinkage</strong> — as % e.g. -0.082% &nbsp;|&nbsp;
+          <strong>OpsScore</strong> — number e.g. 85 or 85% &nbsp;|&nbsp;
+          <strong>Fraud</strong> — Yes or No
+        </p>
+        <button class="btn-dl" onclick="downloadTemplate()">&#8595; Download blank template CSV</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== SCORING LEGEND ===== -->
+  <div class="score-legend">
+    <strong>Risk scoring:</strong>
+    <span><span class="sp sp-r">Shrinkage &gt; 0.075%</span> = +30%</span>
+    <span><span class="sp sp-g">Ops score &ge; 90%</span> = +0%</span>
+    <span><span class="sp sp-a">Ops score 80&ndash;89%</span> = +20%</span>
+    <span><span class="sp sp-r">Ops score &lt; 80%</span> = +30%</span>
+    <span><span class="sp sp-r">Fraud occurred</span> = +20%</span>
+    <span class="legend-divider"><strong>Levels:</strong> High &ge;50% &nbsp;|&nbsp; Medium &ge;20% &nbsp;|&nbsp; Low &lt;20%</span>
+  </div>
+
+  <!-- ===== FILTERS ===== -->
+  <div class="filter-row">
+    <label>Region:</label>
+    <select id="regionFilter" onchange="applyFilters()"><option value="all">All regions</option></select>
+    <label>Risk level:</label>
+    <select id="riskFilter" onchange="applyFilters()">
+      <option value="all">All</option>
+      <option value="High">High only</option>
+      <option value="Medium">Medium only</option>
+      <option value="Low">Low only</option>
+    </select>
+    <label>Sort by:</label>
+    <select id="sortFilter" onchange="applyFilters()">
+      <option value="risk">Risk score</option>
+      <option value="shrinkage">Shrinkage %</option>
+      <option value="opsScore">Ops scorecard</option>
+      <option value="store">Store name</option>
+    </select>
+  </div>
+
+  <!-- ===== KPI CARDS ===== -->
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <!-- ===== CHARTS ===== -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-label">Risk score by store (top 10)</div>
+      <div class="legend-row">
+        <span><span class="ld" style="background:#e24b4a"></span>High (&ge;50%)</span>
+        <span><span class="ld" style="background:#ef9f27"></span>Medium (&ge;20%)</span>
+        <span><span class="ld" style="background:#639922"></span>Low (&lt;20%)</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="barChart" role="img" aria-label="Horizontal bar chart of top 10 risk scores">Top 10 store risk scores.</canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-label">Risk distribution</div>
+      <div class="legend-row" id="pieLegend"></div>
+      <div class="chart-wrap">
+        <canvas id="pieChart" role="img" aria-label="Donut chart showing risk distribution">Risk distribution.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TABLE ===== -->
+  <div class="sec-hdr">
+    <div class="sec-title">Store-level risk register</div>
+    <div class="sec-count" id="storeCount"></div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Store</th>
+          <th>Region</th>
+          <th>Shrinkage %</th>
+          <th>Ops scorecard</th>
+          <th>Fraud</th>
+          <th>Risk level</th>
+          <th>Risk score</th>
+        </tr>
+      </thead>
+      <tbody id="storeBody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Upload your CSV to replace sample data</div>
+
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
