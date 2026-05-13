@@ -9,6 +9,9 @@ let activeStores = [];
 let bChart = null;
 let pChart = null;
 
+/* Default Google Sheet — always loaded on page open */
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1T7BMVcRLxLOL6HA4FiJMHPHJch6d05xeWzWTx_XqDIw/edit?usp=sharing';
+
 /* ============================================================
    RISK SCORING
    Rules defined by Yallappa Tenkappanavar — Loss Prevention
@@ -602,12 +605,13 @@ activeStores = SAMPLE.map(calcRisk);
 rebuildRegionFilter();
 applyFilters();
 
-/* Auto-load on page open — URL param takes priority over localStorage */
+/* Auto-load on page open — URL param > localStorage > default hardcoded sheet */
 (function autoLoad() {
   const param = new URLSearchParams(location.search).get('sheet');
-  const saved = param ? decodeURIComponent(param) : localStorage.getItem('sheetUrl');
-  if (!saved) return;
-  document.getElementById('sheetUrl').value = saved;
+  const url   = param
+    ? decodeURIComponent(param)
+    : (localStorage.getItem('sheetUrl') || DEFAULT_SHEET_URL);
+  document.getElementById('sheetUrl').value = url;
   switchTab('sheet');
   loadFromGoogleSheet();
 })();
