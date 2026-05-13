@@ -24,6 +24,9 @@ let pChart = null;
    Total <  20  → Low
    ============================================================ */
 function calcRisk(s) {
+  if (s.pending || s.opsScore === null) {
+    return { ...s, shrinkPts: 0, opsPts: 0, fraudPts: 0, total: null, level: 'Pending' };
+  }
   const shrinkPts = s.shrinkage < -0.075 ? 30 : 0;
   const opsPts    = s.opsScore >= 90 ? 0 : s.opsScore >= 80 ? 20 : 30;
   const fraudPts  = s.fraud ? 20 : 0;
@@ -97,6 +100,9 @@ function parseCSV(text) {
 
   const iStore  = col(['store', 'storename']);
   const iRegion = col(['region']);
+  const iCM     = col(['cmname', 'cm', 'clustermanager', 'cmname']);
+  const iRM     = col(['rmname', 'rm', 'regionalmanager', 'rmname']);
+  const iMonth  = col(['month', 'monthname']);
   /* Accept "Shrinakge" typo from real sheet alongside correct spelling */
   const iShrink = col(['shrinkage', 'shrinkage%', 'shrinkagepct', 'shrinakge', 'shrinakge%']);
   const iOps    = col(['opsscore', 'opscore', 'operationsscore', 'operationscore', 'operationscorecard', 'opsscore%']);
@@ -104,7 +110,7 @@ function parseCSV(text) {
   const iFraud  = col(['fraud', 'fraudredflags', 'fraudredflag', 'fraudredflag(s)']);
 
   const missing = [
-    ['Store',    iStore],
+    ['Store', iStore],
     ['Shrinkage / Shrinakge', iShrink],
     ['OpsScore / Operation Scorecard', iOps],
   ].filter(([, v]) => v === -1).map(([k]) => k);
@@ -118,11 +124,24 @@ function parseCSV(text) {
     const c = lines[i].split(',').map(x => x.trim());
     if (c.length < 3) continue;
 
-    const shRaw = c[iShrink].replace(/\s/g, '');
-    const opRaw = c[iOps].replace(/\s/g, '');
+    const storeName = c[iStore] || 'Store ' + i;
+    const region    = (iRegion !== -1 && c[iRegion] && c[iRegion] !== '-')
+      ? c[iRegion] : storeCodeToRegion(storeName);
+    const cm    = iCM    !== -1 ? (c[iCM]    || '-') : '-';
+    const rm    = iRM    !== -1 ? (c[iRM]    || '-') : '-';
+    const month = iMonth !== -1 ? (c[iMonth] || '-') : '-';
 
-    /* Skip rows where Ops Score is missing — can't calculate risk */
-    if (!opRaw || opRaw === '-') continue;
+    const shRaw = (c[iShrink] || '').replace(/\s/g, '');
+    const opRaw = (c[iOps]    || '').replace(/\s/g, '');
+
+    const fraudRaw = (iFraud !== -1 ? c[iFraud] || '' : '').trim().toLowerCase();
+    const fraud = fraudRaw !== '' && fraudRaw !== '-' && fraudRaw !== 'no' && fraudRaw !== 'false' && fraudRaw !== '0';
+
+    /* Rows with missing Ops Score are included as "Pending" */
+    if (!opRaw || opRaw === '-') {
+      rows.push({ store: storeName, region, cm, rm, month, shrinkage: 0, opsScore: null, fraud, pending: true });
+      continue;
+    }
     const opNum = parseFloat(opRaw.replace('%', ''));
     if (isNaN(opNum)) continue;
 
@@ -132,20 +151,9 @@ function parseCSV(text) {
 
     const shrinkage = (!shRaw || shRaw === '-') ? 0 :
       shRaw.includes('%') ? shNum : (Math.abs(shNum) < 0.01 ? shNum * 100 : shNum);
-
     const opsScore = opRaw.includes('%') ? opNum : (opNum <= 1 ? opNum * 100 : opNum);
 
-    const storeName = c[iStore] || 'Store ' + i;
-    /* Use Region column if present, otherwise derive from store code prefix */
-    const region = (iRegion !== -1 && c[iRegion] && c[iRegion] !== '-')
-      ? c[iRegion]
-      : storeCodeToRegion(storeName);
-
-    const fraudRaw = (iFraud !== -1 ? c[iFraud] || '' : '').trim().toLowerCase();
-    /* Treat empty / "-" / "no" as no fraud; any other value (Yes, flag, etc.) as fraud */
-    const fraud = fraudRaw !== '' && fraudRaw !== '-' && fraudRaw !== 'no' && fraudRaw !== 'false' && fraudRaw !== '0';
-
-    rows.push({ store: storeName, region, shrinkage, opsScore, fraud });
+    rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore, fraud, pending: false });
   }
 
   if (!rows.length) {
@@ -323,13 +331,14 @@ function applyFilters() {
    RENDER — KPI CARDS
    ============================================================ */
 function renderKPIs(data) {
-  const n  = data.length || 1;
-  const h  = data.filter(s => s.level === 'High').length;
-  const m  = data.filter(s => s.level === 'Medium').length;
-  const l  = data.filter(s => s.level === 'Low').length;
-  const sr = data.filter(s => s.shrinkPts > 0).length;
+  const scored = data.filter(s => s.level !== 'Pending');
+  const n  = scored.length || 1;
+  const h  = scored.filter(s => s.level === 'High').length;
+  const m  = scored.filter(s => s.level === 'Medium').length;
+  const l  = scored.filter(s => s.level === 'Low').length;
+  const sr = scored.filter(s => s.shrinkPts > 0).length;
   const fr = data.filter(s => s.fraud).length;
-  const ow = data.filter(s => s.opsPts > 0).length;
+  const ow = scored.filter(s => s.opsPts > 0).length;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="kpi-card">
@@ -378,13 +387,14 @@ function renderTable(data) {
 
   if (!data.length) {
     document.getElementById('storeBody').innerHTML =
-      '<tr><td colspan="7"><div class="empty">No stores match the selected filters.</div></td></tr>';
+      '<tr><td colspan="10"><div class="empty">No stores match the selected filters.</div></td></tr>';
     return;
   }
 
   document.getElementById('storeBody').innerHTML = data.map(s => {
-    const badge = s.level === 'High' ? 'rh' : s.level === 'Medium' ? 'rm' : 'rl';
-    const sh    = s.shrinkage.toFixed(3);
+    const isPending = s.level === 'Pending';
+    const badge = isPending ? 'rp' : s.level === 'High' ? 'rh' : s.level === 'Medium' ? 'rm' : 'rl';
+    const sh    = s.shrinkage ? s.shrinkage.toFixed(3) : '0.000';
     const shC   = s.shrinkPts > 0 ? '#a32d2d' : '#2a5c14';
     const opC   = s.opsPts === 30 ? '#a32d2d' : s.opsPts === 20 ? '#854f0b' : '#2a5c14';
     const parts = [
@@ -396,11 +406,14 @@ function renderTable(data) {
     return `<tr>
       <td style="font-weight:600">${s.store}</td>
       <td style="color:#6b6b68">${s.region}</td>
-      <td style="color:${shC};font-weight:600">${sh}%${s.shrinkPts > 0 ? ' &#9650;' : ''}</td>
-      <td style="color:${opC};font-weight:600">${s.opsScore}%</td>
+      <td style="color:#6b6b68">${s.cm || '-'}</td>
+      <td style="color:#6b6b68">${s.rm || '-'}</td>
+      <td style="color:#6b6b68">${s.month || '-'}</td>
+      <td style="color:${isPending ? '#aaa' : shC};font-weight:600">${isPending ? '-' : sh + '%' + (s.shrinkPts > 0 ? ' &#9650;' : '')}</td>
+      <td style="color:${isPending ? '#aaa' : opC};font-weight:600">${isPending ? '-' : s.opsScore + '%'}</td>
       <td style="color:${s.fraud ? '#a32d2d' : '#2a5c14'};font-weight:600">${s.fraud ? 'Yes' : 'No'}</td>
       <td><span class="rb ${badge}">${s.level}</span></td>
-      <td style="font-weight:600">${s.total}%<span class="bkd">(${parts})</span></td>
+      <td style="font-weight:600">${isPending ? '-' : s.total + '%<span class="bkd">(' + parts + ')</span>'}</td>
     </tr>`;
   }).join('');
 }
@@ -409,14 +422,15 @@ function renderTable(data) {
    RENDER — CHARTS
    ============================================================ */
 function renderCharts(data) {
-  const top10     = [...data].sort((a, b) => b.total - a.total).slice(0, 10);
+  const scored    = data.filter(s => s.level !== 'Pending');
+  const top10     = [...scored].sort((a, b) => b.total - a.total).slice(0, 10);
   const barColors = top10.map(s =>
     s.level === 'High' ? '#e24b4a' : s.level === 'Medium' ? '#ef9f27' : '#639922'
   );
-  const h     = data.filter(s => s.level === 'High').length;
-  const m     = data.filter(s => s.level === 'Medium').length;
-  const l     = data.filter(s => s.level === 'Low').length;
-  const total = data.length || 1;
+  const h     = scored.filter(s => s.level === 'High').length;
+  const m     = scored.filter(s => s.level === 'Medium').length;
+  const l     = scored.filter(s => s.level === 'Low').length;
+  const total = scored.length || 1;
 
   if (bChart) { bChart.destroy(); bChart = null; }
   if (pChart) { pChart.destroy(); pChart = null; }
