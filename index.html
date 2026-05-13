@@ -102,19 +102,26 @@
   <!-- ===== FILTERS ===== -->
   <div class="filter-row">
     <label>Region:</label>
-    <select id="regionFilter" onchange="applyFilters()"><option value="all">All regions</option></select>
+    <select id="regionFilter" onchange="applyFilters()"><option value="all">All</option></select>
+    <label>CM Name:</label>
+    <select id="cmFilter" onchange="applyFilters()"><option value="all">All</option></select>
+    <label>RM Name:</label>
+    <select id="rmFilter" onchange="applyFilters()"><option value="all">All</option></select>
+    <label>Month:</label>
+    <select id="monthFilter" onchange="applyFilters()"><option value="all">All</option></select>
     <label>Risk level:</label>
     <select id="riskFilter" onchange="applyFilters()">
       <option value="all">All</option>
-      <option value="High">High only</option>
-      <option value="Medium">Medium only</option>
-      <option value="Low">Low only</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+      <option value="Pending">Pending</option>
     </select>
     <label>Sort by:</label>
     <select id="sortFilter" onchange="applyFilters()">
       <option value="risk">Risk score</option>
       <option value="shrinkage">Shrinkage %</option>
-      <option value="opsScore">Ops scorecard</option>
+      <option value="opsScore">Operation Scorecard</option>
       <option value="store">Store name</option>
     </select>
   </div>
@@ -153,16 +160,16 @@
     <table>
       <thead>
         <tr>
-          <th>Store</th>
+          <th>Store Name</th>
           <th>Region</th>
           <th>CM Name</th>
           <th>RM Name</th>
           <th>Month</th>
           <th>Shrinkage %</th>
-          <th>Ops scorecard</th>
-          <th>Fraud</th>
-          <th>Risk level</th>
-          <th>Risk score</th>
+          <th>Operation Scorecard</th>
+          <th>Fraud Red Flags</th>
+          <th>Risk Level</th>
+          <th>Risk Score</th>
         </tr>
       </thead>
       <tbody id="storeBody"></tbody>

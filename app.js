@@ -176,7 +176,7 @@ function clearData() {
   document.getElementById('uploadStatus').className = 'upload-status';
   document.getElementById('sheetStatus').className = 'upload-status';
   document.getElementById('sheetUrl').value = '';
-  rebuildRegionFilter();
+  rebuildFilters();
   applyFilters();
 }
 
@@ -288,28 +288,42 @@ dz.addEventListener('drop', e => {
 });
 
 /* ============================================================
-   REGION FILTER — rebuilds dropdown from loaded data
+   FILTERS — rebuild all dropdowns from loaded data
    ============================================================ */
-function rebuildRegionFilter() {
-  const regions = [...new Set(activeStores.map(s => s.region))].sort();
-  const sel = document.getElementById('regionFilter');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="all">All regions</option>' +
-    regions.map(r => `<option value="${r}">${r}</option>`).join('');
-  if (regions.includes(cur)) sel.value = cur;
+function rebuildFilters() {
+  function rebuild(id, values, allLabel) {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = `<option value="all">${allLabel}</option>` +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  rebuild('regionFilter', [...new Set(activeStores.map(s => s.region))].sort(), 'All');
+  rebuild('cmFilter',     [...new Set(activeStores.map(s => s.cm).filter(v => v && v !== '-'))].sort(), 'All');
+  rebuild('rmFilter',     [...new Set(activeStores.map(s => s.rm).filter(v => v && v !== '-'))].sort(), 'All');
+  rebuild('monthFilter',  [...new Set(activeStores.map(s => s.month).filter(v => v && v !== '-'))], 'All');
 }
+
+/* Keep old name as alias so existing calls still work */
+function rebuildRegionFilter() { rebuildFilters(); }
 
 /* ============================================================
    FILTERS & SORTING
    ============================================================ */
 function getFiltered() {
-  const reg  = document.getElementById('regionFilter').value;
-  const risk = document.getElementById('riskFilter').value;
-  const sort = document.getElementById('sortFilter').value;
+  const reg   = document.getElementById('regionFilter').value;
+  const cm    = document.getElementById('cmFilter').value;
+  const rm    = document.getElementById('rmFilter').value;
+  const month = document.getElementById('monthFilter').value;
+  const risk  = document.getElementById('riskFilter').value;
+  const sort  = document.getElementById('sortFilter').value;
 
   let data = activeStores.filter(s =>
-    (reg  === 'all' || s.region === reg) &&
-    (risk === 'all' || s.level  === risk)
+    (reg   === 'all' || s.region === reg) &&
+    (cm    === 'all' || s.cm    === cm) &&
+    (rm    === 'all' || s.rm    === rm) &&
+    (month === 'all' || s.month === month) &&
+    (risk  === 'all' || s.level === risk)
   );
 
   if      (sort === 'risk')      data.sort((a, b) => b.total - a.total);
