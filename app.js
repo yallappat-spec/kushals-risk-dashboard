@@ -16,9 +16,9 @@ const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1T7BMVcRLxLOL6
    RISK SCORING
    Rules defined by Yallappa Tenkappanavar — Loss Prevention
    
-   Shrinkage > 0.075%     → +30 pts
+   Shrinkage > 0.075%     → +40 pts
    Ops score 80–89%       → +20 pts
-   Ops score < 80%        → +30 pts
+   Ops score < 80%        → +40 pts
    Ops score >= 90%       → +0  pts
    Fraud occurred         → +20 pts
    
@@ -30,8 +30,8 @@ function calcRisk(s) {
   if (s.pending || s.opsScore === null) {
     return { ...s, shrinkPts: 0, opsPts: 0, fraudPts: 0, total: null, level: 'Pending' };
   }
-  const shrinkPts = s.shrinkage < -0.075 ? 30 : 0;
-  const opsPts    = s.opsScore >= 90 ? 0 : s.opsScore >= 80 ? 20 : 30;
+  const shrinkPts = s.shrinkage < -0.075 ? 40 : 0;
+  const opsPts    = s.opsScore >= 90 ? 0 : s.opsScore >= 80 ? 20 : 40;
   const fraudPts  = s.fraud ? 20 : 0;
   const total     = shrinkPts + opsPts + fraudPts;
   const level     = total >= 50 ? 'High' : total >= 20 ? 'Medium' : 'Low';
@@ -523,7 +523,7 @@ function renderCharts(data) {
       scales: {
         x: {
           min: 0,
-          max: 80,
+          max: 100,
           ticks: { callback: v => v + '%', font: { size: 11 } },
           grid: { color: 'rgba(0,0,0,0.06)' },
         },
