@@ -624,6 +624,17 @@ tbody tr:hover { background: #fafaf8; }
   line-height: 1.4;
 }
 
+.store-link {
+  font-weight: 600;
+  color: #2d6fcf;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.store-link:hover {
+  text-decoration: underline;
+}
+
 .issues-obs {
   max-width: 500px;
   white-space: nowrap;
