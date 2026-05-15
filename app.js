@@ -479,7 +479,7 @@ function renderTable(data) {
     ].filter(Boolean).join(' ') || 'no risk';
 
     return `<tr>
-      <td><span class="store-link" onclick="goToStoreIssues('${s.store.replace(/'/g, "\\'")}')">${s.store}</span></td>
+      <td><span class="store-link" onclick="toggleStoreIssues('${s.store.replace(/'/g, "\\'")}', this)">&#9654; ${s.store}</span></td>
       <td style="color:#6b6b68">${s.region}</td>
       <td style="color:#6b6b68">${s.cm || '-'}</td>
       <td style="color:#6b6b68">${s.rm || '-'}</td>
@@ -634,16 +634,68 @@ function switchPageTab(tab) {
   if (tab === 'issues' && issuesData.length === 0) loadIssuesSheet();
 }
 
-function goToStoreIssues(storeName) {
-  switchPageTab('issues');
-  const sel = document.getElementById('issueStoreFilter');
-  if ([...sel.options].some(o => o.value === storeName)) {
-    sel.value = storeName;
-  } else {
-    sel.value = 'all';
+function toggleStoreIssues(storeName, el) {
+  const tr = el.closest('tr');
+  const next = tr.nextElementSibling;
+
+  /* collapse if already open */
+  if (next && next.classList.contains('issues-expand-row') && next.dataset.store === storeName) {
+    next.remove();
+    el.innerHTML = '&#9654; ' + storeName;
+    el.classList.remove('store-link-open');
+    return;
   }
-  applyIssuesFilters();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  /* close any other open row */
+  document.querySelectorAll('.issues-expand-row').forEach(r => r.remove());
+  document.querySelectorAll('.store-link-open').forEach(s => {
+    s.innerHTML = '&#9654; ' + s.dataset.store;
+    s.classList.remove('store-link-open');
+  });
+
+  el.dataset.store = storeName;
+  el.innerHTML = '&#9660; ' + storeName;
+  el.classList.add('store-link-open');
+
+  if (issuesData.length === 0) {
+    const loadTr = document.createElement('tr');
+    loadTr.className = 'issues-expand-row';
+    loadTr.dataset.store = storeName;
+    loadTr.innerHTML = '<td colspan="10" class="issues-expand-cell" style="padding:12px;color:#6b6b68;font-style:italic">Loading issues…</td>';
+    tr.after(loadTr);
+    loadIssuesSheet().then(() => { loadTr.remove(); insertIssuesRow(storeName, tr, el); });
+    return;
+  }
+
+  insertIssuesRow(storeName, tr, el);
+}
+
+function insertIssuesRow(storeName, tr, el) {
+  const storeIssues = issuesData.filter(r => r.store === storeName);
+  const expandTr = document.createElement('tr');
+  expandTr.className = 'issues-expand-row';
+  expandTr.dataset.store = storeName;
+
+  if (!storeIssues.length) {
+    expandTr.innerHTML = '<td colspan="10" class="issues-expand-cell" style="padding:12px;color:#9b9b98;font-style:italic">No issues recorded for this store.</td>';
+  } else {
+    const bodyRows = storeIssues.map(r => {
+      const badge = r.risk === 'High' ? 'rh' : r.risk === 'Medium' ? 'rm' : r.risk === 'Low' ? 'rl' : 'rp';
+      return `<tr>
+        <td style="color:#6b6b68">${r.section}</td>
+        <td><span class="rb ${badge}">${r.risk}</span></td>
+        <td style="color:#555">${r.clause}</td>
+        <td>${r.obs !== '-' ? r.obs : '<span style="color:#aaa">—</span>'}</td>
+      </tr>`;
+    }).join('');
+    expandTr.innerHTML = `<td colspan="10" class="issues-expand-cell">
+      <table class="issues-sub-table">
+        <thead><tr><th>Section</th><th>Risk</th><th>Audit Clause</th><th>Observation</th></tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </td>`;
+  }
+  tr.after(expandTr);
 }
 
 /* ============================================================
