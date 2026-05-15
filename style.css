@@ -588,6 +588,48 @@ tbody tr:hover { background: #fafaf8; }
   font-size: 13px;
 }
 
+/* --- Page Tabs --- */
+.page-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #e0dfd8;
+}
+
+.ptab {
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  color: #6b6b68;
+  transition: color 0.15s;
+}
+
+.ptab:hover { color: #1a1a1a; }
+
+.ptab.active {
+  color: #1a1a1a;
+  border-bottom-color: #2d6fcf;
+  font-weight: 600;
+}
+
+/* --- Issues Table --- */
+.issues-clause {
+  max-width: 280px;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.issues-obs {
+  max-width: 220px;
+  white-space: normal;
+  line-height: 1.4;
+}
+
 /* --- Footer --- */
 .footer {
   margin-top: 20px;

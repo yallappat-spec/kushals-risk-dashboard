@@ -19,6 +19,12 @@
     <div class="db-badge">Max risk score: 100%</div>
   </div>
 
+  <!-- ===== PAGE TABS ===== -->
+  <div class="page-tabs">
+    <button class="ptab active" id="ptab-risk"   onclick="switchPageTab('risk')">&#128202; Risk Dashboard</button>
+    <button class="ptab"        id="ptab-issues" onclick="switchPageTab('issues')">&#128203; Store Issues</button>
+  </div>
+
   <!-- ===== DATA SOURCE BAR ===== -->
   <div class="ds-bar">
     <span id="dsStatusDot" class="ds-dot ds-dot-grey"></span>
@@ -68,98 +74,160 @@
 
   </div>
 
-  <!-- ===== SCORING LEGEND ===== -->
-  <div class="score-legend">
-    <strong>Risk scoring:</strong>
-    <span><span class="sp sp-r">Shrinkage &gt; 0.075%</span> = +40%</span>
-    <span><span class="sp sp-g">Ops score &ge; 90%</span> = +0%</span>
-    <span><span class="sp sp-a">Ops score 80&ndash;89%</span> = +20%</span>
-    <span><span class="sp sp-r">Ops score &lt; 80%</span> = +40%</span>
-    <span><span class="sp sp-r">Fraud occurred</span> = +20%</span>
-    <span class="legend-divider"><strong>Levels:</strong> High &ge;50% &nbsp;|&nbsp; Medium &ge;20% &nbsp;|&nbsp; Low &lt;20%</span>
-  </div>
+  <!-- ===== RISK DASHBOARD TAB ===== -->
+  <div id="pageRisk">
 
-  <!-- ===== FILTERS ===== -->
-  <div class="filter-row">
-    <label>Region:</label>
-    <select id="regionFilter" onchange="applyFilters()"><option value="all">All</option></select>
-    <label>CM Name:</label>
-    <select id="cmFilter" onchange="applyFilters()"><option value="all">All</option></select>
-    <label>RM Name:</label>
-    <select id="rmFilter" onchange="applyFilters()"><option value="all">All</option></select>
-    <label>Month:</label>
-    <select id="monthFilter" onchange="applyFilters()"><option value="all">All</option></select>
-    <label>Risk level:</label>
-    <select id="riskFilter" onchange="applyFilters()">
-      <option value="all">All</option>
-      <option value="High">High</option>
-      <option value="Medium">Medium</option>
-      <option value="Low">Low</option>
-      <option value="Pending">Pending</option>
-    </select>
-    <label>Sort by:</label>
-    <select id="sortFilter" onchange="applyFilters()">
-      <option value="risk">Risk score</option>
-      <option value="shrinkage">Shrinkage %</option>
-      <option value="opsScore">Operation Scorecard</option>
-      <option value="store">Store name</option>
-    </select>
-  </div>
+    <!-- ===== SCORING LEGEND ===== -->
+    <div class="score-legend">
+      <strong>Risk scoring:</strong>
+      <span><span class="sp sp-r">Shrinkage &gt; 0.075%</span> = +40%</span>
+      <span><span class="sp sp-g">Ops score &ge; 90%</span> = +0%</span>
+      <span><span class="sp sp-a">Ops score 80&ndash;89%</span> = +20%</span>
+      <span><span class="sp sp-r">Ops score &lt; 80%</span> = +40%</span>
+      <span><span class="sp sp-r">Fraud occurred</span> = +20%</span>
+      <span class="legend-divider"><strong>Levels:</strong> High &ge;50% &nbsp;|&nbsp; Medium &ge;20% &nbsp;|&nbsp; Low &lt;20%</span>
+    </div>
 
-  <!-- ===== KPI CARDS ===== -->
-  <div class="kpi-grid" id="kpiGrid"></div>
+    <!-- ===== FILTERS ===== -->
+    <div class="filter-row">
+      <label>Region:</label>
+      <select id="regionFilter" onchange="applyFilters()"><option value="all">All</option></select>
+      <label>CM Name:</label>
+      <select id="cmFilter" onchange="applyFilters()"><option value="all">All</option></select>
+      <label>RM Name:</label>
+      <select id="rmFilter" onchange="applyFilters()"><option value="all">All</option></select>
+      <label>Month:</label>
+      <select id="monthFilter" onchange="applyFilters()"><option value="all">All</option></select>
+      <label>Risk level:</label>
+      <select id="riskFilter" onchange="applyFilters()">
+        <option value="all">All</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+        <option value="Pending">Pending</option>
+      </select>
+      <label>Sort by:</label>
+      <select id="sortFilter" onchange="applyFilters()">
+        <option value="risk">Risk score</option>
+        <option value="shrinkage">Shrinkage %</option>
+        <option value="opsScore">Operation Scorecard</option>
+        <option value="store">Store name</option>
+      </select>
+    </div>
 
-  <!-- ===== CHARTS ===== -->
-  <div class="charts-row">
-    <div class="chart-card">
-      <div class="chart-label">Risk score by store (top 10)</div>
-      <div class="legend-row">
-        <span><span class="ld" style="background:#e24b4a"></span>High (&ge;50%)</span>
-        <span><span class="ld" style="background:#ef9f27"></span>Medium (&ge;20%)</span>
-        <span><span class="ld" style="background:#639922"></span>Low (&lt;20%)</span>
+    <!-- ===== KPI CARDS ===== -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- ===== CHARTS ===== -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label">Risk score by store (top 10)</div>
+        <div class="legend-row">
+          <span><span class="ld" style="background:#e24b4a"></span>High (&ge;50%)</span>
+          <span><span class="ld" style="background:#ef9f27"></span>Medium (&ge;20%)</span>
+          <span><span class="ld" style="background:#639922"></span>Low (&lt;20%)</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="barChart" role="img" aria-label="Horizontal bar chart of top 10 risk scores">Top 10 store risk scores.</canvas>
+        </div>
       </div>
-      <div class="chart-wrap">
-        <canvas id="barChart" role="img" aria-label="Horizontal bar chart of top 10 risk scores">Top 10 store risk scores.</canvas>
+      <div class="chart-card">
+        <div class="chart-label">Risk distribution</div>
+        <div class="legend-row" id="pieLegend"></div>
+        <div class="chart-wrap">
+          <canvas id="pieChart" role="img" aria-label="Donut chart showing risk distribution">Risk distribution.</canvas>
+        </div>
       </div>
     </div>
-    <div class="chart-card">
-      <div class="chart-label">Risk distribution</div>
-      <div class="legend-row" id="pieLegend"></div>
-      <div class="chart-wrap">
-        <canvas id="pieChart" role="img" aria-label="Donut chart showing risk distribution">Risk distribution.</canvas>
+
+    <!-- ===== TABLE ===== -->
+    <div class="sec-hdr">
+      <div class="sec-title">Store-level risk register</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="storeCount"></div>
+        <button class="btn-export" onclick="exportCSV()">&#8595; Export CSV</button>
       </div>
     </div>
-  </div>
-
-  <!-- ===== TABLE ===== -->
-  <div class="sec-hdr">
-    <div class="sec-title">Store-level risk register</div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <div class="sec-count" id="storeCount"></div>
-      <button class="btn-export" onclick="exportCSV()">&#8595; Export CSV</button>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Store Name</th>
+            <th>Region</th>
+            <th>CM Name</th>
+            <th>RM Name</th>
+            <th>Month</th>
+            <th>Shrinkage %</th>
+            <th>Operation Scorecard</th>
+            <th>Fraud Red Flags</th>
+            <th>Risk Level</th>
+            <th>Risk Score</th>
+          </tr>
+        </thead>
+        <tbody id="storeBody"></tbody>
+      </table>
     </div>
-  </div>
-  <div class="tbl-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Store Name</th>
-          <th>Region</th>
-          <th>CM Name</th>
-          <th>RM Name</th>
-          <th>Month</th>
-          <th>Shrinkage %</th>
-          <th>Operation Scorecard</th>
-          <th>Fraud Red Flags</th>
-          <th>Risk Level</th>
-          <th>Risk Score</th>
-        </tr>
-      </thead>
-      <tbody id="storeBody"></tbody>
-    </table>
-  </div>
 
-  <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Upload your CSV to replace sample data</div>
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Upload your CSV to replace sample data</div>
+
+  </div><!-- end pageRisk -->
+
+  <!-- ===== STORE ISSUES TAB ===== -->
+  <div id="pageIssues" style="display:none">
+
+    <div id="issuesStatus" class="upload-status" style="margin-bottom:12px"></div>
+
+    <div class="filter-row">
+      <label>Store:</label>
+      <select id="issueStoreFilter"   onchange="applyIssuesFilters()"><option value="all">All</option></select>
+      <label>CM Name:</label>
+      <select id="issueCmFilter"      onchange="applyIssuesFilters()"><option value="all">All</option></select>
+      <label>RM Name:</label>
+      <select id="issueRmFilter"      onchange="applyIssuesFilters()"><option value="all">All</option></select>
+      <label>Period:</label>
+      <select id="issuePeriodFilter"  onchange="applyIssuesFilters()"><option value="all">All</option></select>
+      <label>Section:</label>
+      <select id="issueSectionFilter" onchange="applyIssuesFilters()"><option value="all">All</option></select>
+      <label>Risk:</label>
+      <select id="issueRiskFilter" onchange="applyIssuesFilters()">
+        <option value="all">All</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+    </div>
+
+    <div class="sec-hdr">
+      <div class="sec-title">Operation Scorecard Issues</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="issuesCount"></div>
+        <button class="btn-export" onclick="exportIssuesCSV()">&#8595; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Store</th>
+            <th>Period</th>
+            <th>Score%</th>
+            <th>Section</th>
+            <th>Audit Clause</th>
+            <th>Risk</th>
+            <th>Wt.Max</th>
+            <th>Rating</th>
+            <th>Points Lost</th>
+            <th>Observation</th>
+          </tr>
+        </thead>
+        <tbody id="issuesBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Operation Scorecard Issues</div>
+
+  </div><!-- end pageIssues -->
 
 </div>
 
