@@ -21,8 +21,9 @@
 
   <!-- ===== PAGE TABS ===== -->
   <div class="page-tabs">
-    <button class="ptab active" id="ptab-risk"   onclick="switchPageTab('risk')">&#128202; Risk Dashboard</button>
-    <button class="ptab"        id="ptab-issues" onclick="switchPageTab('issues')">&#128203; Store Issues</button>
+    <button class="ptab active" id="ptab-risk"      onclick="switchPageTab('risk')">&#128202; Risk Dashboard</button>
+    <button class="ptab"        id="ptab-issues"    onclick="switchPageTab('issues')">&#128203; Store Issues</button>
+    <button class="ptab"        id="ptab-shrinkage" onclick="switchPageTab('shrinkage')">&#128200; Shrinkage %</button>
   </div>
 
   <!-- ===== DATA SOURCE BAR ===== -->
@@ -221,6 +222,46 @@
     <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Operation Scorecard Issues</div>
 
   </div><!-- end pageIssues -->
+
+  <!-- ===== SHRINKAGE % TAB ===== -->
+  <div id="pageShrinkage" style="display:none">
+
+    <div id="shrinkageStatus" class="upload-status" style="margin-bottom:12px"></div>
+
+    <div class="filter-row">
+      <label>Quarter:</label>
+      <select id="shrinkageQuarterFilter" onchange="applyShrinkageFilters()"><option value="all">All</option></select>
+      <label>Outlet:</label>
+      <select id="shrinkageOutletFilter"  onchange="applyShrinkageFilters()"><option value="all">All</option></select>
+    </div>
+
+    <div class="sec-hdr">
+      <div class="sec-title">Shrinkage % — Store View</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="shrinkageCount"></div>
+        <button class="btn-export" onclick="exportShrinkageCSV()">&#8595; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Outlet Name</th>
+            <th>Quarter</th>
+            <th>Shrinkage %</th>
+            <th>Shrinkage Value</th>
+            <th>Shrinkage Qty</th>
+            <th>Store Sale</th>
+          </tr>
+        </thead>
+        <tbody id="shrinkageBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Shrinkage % Data</div>
+
+  </div><!-- end pageShrinkage -->
 
 </div>
 
