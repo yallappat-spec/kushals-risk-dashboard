@@ -625,8 +625,10 @@ tbody tr:hover { background: #fafaf8; }
 }
 
 .issues-obs {
-  white-space: normal;
-  line-height: 1.5;
+  max-width: 500px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --- Footer --- */
