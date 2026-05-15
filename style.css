@@ -628,12 +628,44 @@ tbody tr:hover { background: #fafaf8; }
   font-weight: 600;
   color: #2d6fcf;
   cursor: pointer;
-  text-decoration: none;
 }
 
-.store-link:hover {
-  text-decoration: underline;
+.store-link:hover { text-decoration: underline; }
+.store-link-open  { color: #1e55a8; }
+
+/* Inline issues expand row */
+.issues-expand-cell {
+  padding: 0 !important;
+  background: #f4f7ff;
+  border-bottom: 2px solid #4a7fcb;
 }
+
+.issues-sub-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.issues-sub-table thead th {
+  background: #e8eefb;
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2d6fcf;
+  border-bottom: 1px solid #c8d8f5;
+  white-space: nowrap;
+}
+
+.issues-sub-table tbody td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #eaecf5;
+  vertical-align: top;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.issues-sub-table tbody tr:last-child td { border-bottom: none; }
+.issues-sub-table tbody tr:hover { background: #eef3fc; }
 
 .issues-obs {
   max-width: 500px;
