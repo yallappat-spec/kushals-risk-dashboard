@@ -896,7 +896,13 @@ async function loadShrinkageSheet() {
     const res = await fetch(csvUrl);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    shrinkageData = parseShrinkageCSV(text);
+    const storeMap = {};
+    activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
+    shrinkageData = parseShrinkageCSV(text).map(r => ({
+      ...r,
+      cm: storeMap[r.outlet]?.cm || '-',
+      rm: storeMap[r.outlet]?.rm || '-',
+    }));
     rebuildShrinkageFilters();
     applyShrinkageFilters();
     showShrinkageStatus('', '');
@@ -949,16 +955,33 @@ function rebuildShrinkageFilters() {
     if (values.includes(cur)) sel.value = cur;
   }
   rebuild('shrinkageQuarterFilter', [...new Set(shrinkageData.map(r => r.quarter).filter(v => v !== '-'))]);
+  rebuild('shrinkageCmFilter',      [...new Set(shrinkageData.map(r => r.cm).filter(v => v && v !== '-'))].sort());
+  rebuild('shrinkageRmFilter',      [...new Set(shrinkageData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
   rebuild('shrinkageOutletFilter',  [...new Set(shrinkageData.map(r => r.outlet))].sort());
 }
 
 function getFilteredShrinkage() {
   const qtr    = document.getElementById('shrinkageQuarterFilter').value;
+  const cm     = document.getElementById('shrinkageCmFilter').value;
+  const rm     = document.getElementById('shrinkageRmFilter').value;
   const outlet = document.getElementById('shrinkageOutletFilter').value;
-  return shrinkageData.filter(r =>
-    (qtr    === 'all' || r.quarter === qtr) &&
-    (outlet === 'all' || r.outlet  === outlet)
-  );
+  const pctF   = document.getElementById('shrinkagePctFilter').value;
+  return shrinkageData.filter(r => {
+    if (qtr    !== 'all' && r.quarter !== qtr)    return false;
+    if (cm     !== 'all' && r.cm      !== cm)     return false;
+    if (rm     !== 'all' && r.rm      !== rm)     return false;
+    if (outlet !== 'all' && r.outlet  !== outlet) return false;
+    if (pctF   !== 'all') {
+      const v = parseFloat(r.shrPct);
+      if (isNaN(v)) return false;
+      if (pctF === 'pos'   && v <  0)      return false;
+      if (pctF === 'neg'   && v >= 0)      return false;
+      if (pctF === 'lt005' && v >= -0.05)  return false;
+      if (pctF === 'lt010' && v >= -0.10)  return false;
+      if (pctF === 'lt015' && v >= -0.15)  return false;
+    }
+    return true;
+  });
 }
 
 function applyShrinkageFilters() {
