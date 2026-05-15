@@ -10,6 +10,7 @@ let issuesData    = [];
 let shrinkageData = [];
 let bChart = null;
 let pChart = null;
+let rmChart = null;
 
 /* Default Google Sheet — always loaded on page open */
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1T7BMVcRLxLOL6HA4FiJMHPHJch6d05xeWzWTx_XqDIw/edit?usp=sharing';
@@ -985,7 +986,61 @@ function getFilteredShrinkage() {
 }
 
 function applyShrinkageFilters() {
-  renderShrinkageTable(getFilteredShrinkage());
+  const data = getFilteredShrinkage();
+  renderShrinkageChart(data);
+  renderShrinkageTable(data);
+}
+
+function renderShrinkageChart(data) {
+  /* Group by RM, compute average shrinkage % */
+  const rmMap = {};
+  data.forEach(r => {
+    const rm = r.rm !== '-' ? r.rm : 'Unassigned';
+    const v  = parseFloat(r.shrPct);
+    if (isNaN(v)) return;
+    if (!rmMap[rm]) rmMap[rm] = { sum: 0, count: 0 };
+    rmMap[rm].sum   += v;
+    rmMap[rm].count += 1;
+  });
+
+  const labels = Object.keys(rmMap).sort();
+  const values = labels.map(rm => parseFloat((rmMap[rm].sum / rmMap[rm].count).toFixed(4)));
+  const colors = values.map(v => v < 0 ? '#e24b4a' : '#639922');
+
+  if (rmChart) { rmChart.destroy(); rmChart = null; }
+
+  rmChart = new Chart(document.getElementById('shrinkageRmChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg Shrinkage %',
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ' + ctx.parsed.x.toFixed(3) + '%',
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { callback: v => v + '%', font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.06)' },
+        },
+        y: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
 }
 
 function renderShrinkageTable(data) {
