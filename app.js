@@ -640,8 +640,9 @@ function switchPageTab(tab) {
 function toIssuesCSVUrl(mainUrl) {
   const idMatch = mainUrl.trim().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   if (!idMatch) return null;
+  /* gviz/tq endpoint reliably selects a sheet by name; /export?sheet= does not */
   return 'https://docs.google.com/spreadsheets/d/' + idMatch[1] +
-    '/export?format=csv&sheet=' + encodeURIComponent('Operation scorecard issues');
+    '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Operation scorecard issues');
 }
 
 function showIssuesStatus(msg, type) {
