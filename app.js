@@ -1004,43 +1004,53 @@ function renderShrinkageChart(data) {
   });
 
   const labels = Object.keys(rmMap).sort();
-  const values = labels.map(rm => parseFloat((rmMap[rm].sum / rmMap[rm].count).toFixed(4)));
-  const colors = values.map(v => v < 0 ? '#e24b4a' : '#639922');
+  const avgs   = labels.map(rm => parseFloat((rmMap[rm].sum / rmMap[rm].count).toFixed(4)));
+  const absVals = avgs.map(v => Math.abs(v));  /* donut slices use absolute size */
+  const total  = absVals.reduce((a, b) => a + b, 0) || 1;
+
+  const palette = ['#4a7fcb','#ef9f27','#e24b4a','#639922','#9b59b6',
+                   '#1abc9c','#e67e22','#e91e63','#00bcd4','#8bc34a'];
+  const colors  = labels.map((_, i) => palette[i % palette.length]);
 
   if (rmChart) { rmChart.destroy(); rmChart = null; }
 
   rmChart = new Chart(document.getElementById('shrinkageRmChart'), {
-    type: 'bar',
+    type: 'doughnut',
     data: {
       labels,
       datasets: [{
-        label: 'Avg Shrinkage %',
-        data: values,
+        data: absVals,
         backgroundColor: colors,
-        borderWidth: 0,
+        borderWidth: 3,
+        borderColor: '#fff',
       }],
     },
     options: {
-      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ' ' + ctx.parsed.x.toFixed(3) + '%',
+            label: ctx => {
+              const avg = avgs[ctx.dataIndex];
+              const pct = ((absVals[ctx.dataIndex] / total) * 100).toFixed(1);
+              return ` ${ctx.label}: ${avg.toFixed(3)}%  (${pct}% share)`;
+            },
           },
         },
       },
-      scales: {
-        x: {
-          ticks: { callback: v => v + '%', font: { size: 11 } },
-          grid: { color: 'rgba(0,0,0,0.06)' },
-        },
-        y: { ticks: { font: { size: 11 } } },
-      },
     },
   });
+
+  /* Custom legend with actual shrinkage % values */
+  document.getElementById('shrinkageRmLegend').innerHTML = labels.map((rm, i) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px;color:#444">
+      <span style="width:10px;height:10px;border-radius:2px;background:${colors[i]};flex-shrink:0;display:inline-block"></span>
+      <strong>${rm}</strong>&nbsp;${avgs[i].toFixed(3)}%
+      &nbsp;<span style="color:#9b9b98">(${((absVals[i]/total)*100).toFixed(1)}%)</span>
+    </span>`
+  ).join('');
 }
 
 function renderShrinkageTable(data) {
