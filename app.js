@@ -479,7 +479,7 @@ function renderTable(data) {
     ].filter(Boolean).join(' ') || 'no risk';
 
     return `<tr>
-      <td style="font-weight:600">${s.store}</td>
+      <td><span class="store-link" onclick="goToStoreIssues('${s.store.replace(/'/g, "\\'")}')">${s.store}</span></td>
       <td style="color:#6b6b68">${s.region}</td>
       <td style="color:#6b6b68">${s.cm || '-'}</td>
       <td style="color:#6b6b68">${s.rm || '-'}</td>
@@ -632,6 +632,18 @@ function switchPageTab(tab) {
   document.getElementById('ptab-risk').classList.toggle('active',   tab === 'risk');
   document.getElementById('ptab-issues').classList.toggle('active', tab === 'issues');
   if (tab === 'issues' && issuesData.length === 0) loadIssuesSheet();
+}
+
+function goToStoreIssues(storeName) {
+  switchPageTab('issues');
+  const sel = document.getElementById('issueStoreFilter');
+  if ([...sel.options].some(o => o.value === storeName)) {
+    sel.value = storeName;
+  } else {
+    sel.value = 'all';
+  }
+  applyIssuesFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* ============================================================
