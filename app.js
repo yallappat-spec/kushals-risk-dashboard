@@ -692,12 +692,36 @@ function splitCSVLine(line) {
   return result;
 }
 
+/* Full CSV parser — handles quoted fields that contain commas AND newlines */
+function parseFullCSV(text) {
+  const rows = [];
+  let row = [], cur = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"' && text[i + 1] === '"') { cur += '"'; i++; }  /* escaped "" */
+      else if (ch === '"') { inQ = false; }
+      else { cur += ch; }
+    } else {
+      if (ch === '"') { inQ = true; }
+      else if (ch === ',') { row.push(cur.trim()); cur = ''; }
+      else if (ch === '\r' && text[i + 1] === '\n') {
+        row.push(cur.trim()); if (row.some(c => c)) rows.push(row); row = []; cur = ''; i++;
+      } else if (ch === '\n' || ch === '\r') {
+        row.push(cur.trim()); if (row.some(c => c)) rows.push(row); row = []; cur = '';
+      } else { cur += ch; }
+    }
+  }
+  if (cur || row.length) { row.push(cur.trim()); if (row.some(c => c)) rows.push(row); }
+  return rows;
+}
+
 function parseIssuesCSV(text) {
-  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) return [];
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return [];
 
   /* normalise header names: lowercase, strip spaces / % / dots */
-  const hdrs = splitCSVLine(lines[0]).map(h => h.trim().toLowerCase().replace(/[\s%.]/g, ''));
+  const hdrs = allRows[0].map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
 
   function col(...names) {
     for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
@@ -706,18 +730,18 @@ function parseIssuesCSV(text) {
 
   const iStore   = col('store', 'storename');
   const iPeriod  = col('period', 'month');
-  const iScore   = col('score', 'scorepct');   /* Score% → 'score' after strip */
+  const iScore   = col('score', 'scorepct');
   const iSection = col('section');
-  const iClause  = col('auditclause', 'clause'); /* Audit Clause → 'auditclause' */
+  const iClause  = col('auditclause', 'clause');
   const iRisk    = col('risk', 'risklevel');
-  const iWtMax   = col('wtmax', 'weightmax');    /* Wt.Max → 'wtmax' */
+  const iWtMax   = col('wtmax', 'weightmax');
   const iRating  = col('rating');
-  const iPoints  = col('pointslost', 'lostpoints'); /* Points Lost → 'pointslost' */
+  const iPoints  = col('pointslost', 'lostpoints');
   const iObs     = col('observation', 'observations');
 
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const c = splitCSVLine(lines[i]);
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
     const store = iStore !== -1 ? (c[iStore] || '').trim() : '';
     if (!store) continue;
     rows.push({
