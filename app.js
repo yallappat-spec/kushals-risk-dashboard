@@ -5,8 +5,9 @@
    ============================================= */
 
 /* ---- State ---- */
-let activeStores = [];
-let issuesData   = [];
+let activeStores  = [];
+let issuesData    = [];
+let shrinkageData = [];
 let bChart = null;
 let pChart = null;
 
@@ -190,6 +191,10 @@ function clearData() {
   renderIssuesTable([]);
   document.getElementById('issuesCount').textContent = '';
   document.getElementById('issuesStatus').className = 'upload-status';
+  shrinkageData = [];
+  renderShrinkageTable([]);
+  document.getElementById('shrinkageCount').textContent = '';
+  document.getElementById('shrinkageStatus').className = 'upload-status';
 }
 
 /* ============================================================
@@ -281,6 +286,7 @@ async function loadFromGoogleSheet() {
     document.getElementById('uploadPanel').style.display = 'none';
     startAutoRefresh();
     loadIssuesSheet();
+    loadShrinkageSheet();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
   } finally {
@@ -588,6 +594,7 @@ function startAutoRefresh() {
       setDsStatus('Google Sheet · ' + rows.length + ' stores · refreshed ' + now, true);
       showSheetStatus('&#10003; Auto-refreshed at ' + now, 'ok');
       loadIssuesSheet();
+      loadShrinkageSheet();
     } catch (_) { /* silently skip failed auto-refresh */ }
   }, AUTO_REFRESH_MS);
   updateRefreshBadge(true);
@@ -627,11 +634,14 @@ applyFilters();
    PAGE TAB SWITCHING
    ============================================================ */
 function switchPageTab(tab) {
-  document.getElementById('pageRisk').style.display   = tab === 'risk'   ? '' : 'none';
-  document.getElementById('pageIssues').style.display = tab === 'issues' ? '' : 'none';
-  document.getElementById('ptab-risk').classList.toggle('active',   tab === 'risk');
-  document.getElementById('ptab-issues').classList.toggle('active', tab === 'issues');
-  if (tab === 'issues' && issuesData.length === 0) loadIssuesSheet();
+  document.getElementById('pageRisk').style.display      = tab === 'risk'      ? '' : 'none';
+  document.getElementById('pageIssues').style.display    = tab === 'issues'    ? '' : 'none';
+  document.getElementById('pageShrinkage').style.display = tab === 'shrinkage' ? '' : 'none';
+  document.getElementById('ptab-risk').classList.toggle('active',      tab === 'risk');
+  document.getElementById('ptab-issues').classList.toggle('active',    tab === 'issues');
+  document.getElementById('ptab-shrinkage').classList.toggle('active', tab === 'shrinkage');
+  if (tab === 'issues'    && issuesData.length    === 0) loadIssuesSheet();
+  if (tab === 'shrinkage' && shrinkageData.length === 0) loadShrinkageSheet();
 }
 
 function toggleStoreIssues(storeName, el) {
@@ -858,6 +868,143 @@ function getFilteredIssues() {
 
 function applyIssuesFilters() {
   renderIssuesTable(getFilteredIssues());
+}
+
+/* ============================================================
+   SHRINKAGE % TAB
+   ============================================================ */
+function toShrinkageCSVUrl(mainUrl) {
+  const idMatch = mainUrl.trim().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!idMatch) return null;
+  return 'https://docs.google.com/spreadsheets/d/' + idMatch[1] +
+    '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Shrinkage %');
+}
+
+function showShrinkageStatus(msg, type) {
+  const el = document.getElementById('shrinkageStatus');
+  el.innerHTML = msg;
+  el.className = 'upload-status' + (type ? ' ' + type : '');
+}
+
+async function loadShrinkageSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) return;
+  const csvUrl = toShrinkageCSVUrl(raw);
+  if (!csvUrl) return;
+  showShrinkageStatus('Loading shrinkage data…', '');
+  try {
+    const res = await fetch(csvUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    shrinkageData = parseShrinkageCSV(text);
+    rebuildShrinkageFilters();
+    applyShrinkageFilters();
+    showShrinkageStatus('', '');
+  } catch (err) {
+    showShrinkageStatus('&#10007; Could not load Shrinkage sheet: ' + err.message, 'err');
+  }
+}
+
+function parseShrinkageCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return [];
+
+  const hdrs = allRows[0].map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  const iOutlet  = col('outletname', 'outlet', 'store', 'storename');
+  const iQtr     = col('quarter', 'qtr');
+  const iShrPct  = col('shrinkage', 'shrinkagepct');  /* Shrinkage % → 'shrinkage' */
+  const iShrVal  = col('shrinkagevalue', 'shrinkageval');
+  const iShrQty  = col('shrinkageqty', 'shrinkagequantity');
+  const iSale    = col('storesale', 'sale', 'sales');
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
+    if (!outlet) continue;
+    rows.push({
+      outlet:    outlet,
+      quarter:   iQtr    !== -1 ? c[iQtr]    || '-' : '-',
+      shrPct:    iShrPct !== -1 ? c[iShrPct] || '-' : '-',
+      shrVal:    iShrVal !== -1 ? c[iShrVal] || '-' : '-',
+      shrQty:    iShrQty !== -1 ? c[iShrQty] || '-' : '-',
+      sale:      iSale   !== -1 ? c[iSale]   || '-' : '-',
+    });
+  }
+  return rows;
+}
+
+function rebuildShrinkageFilters() {
+  function rebuild(id, values) {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">All</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  rebuild('shrinkageQuarterFilter', [...new Set(shrinkageData.map(r => r.quarter).filter(v => v !== '-'))]);
+  rebuild('shrinkageOutletFilter',  [...new Set(shrinkageData.map(r => r.outlet))].sort());
+}
+
+function getFilteredShrinkage() {
+  const qtr    = document.getElementById('shrinkageQuarterFilter').value;
+  const outlet = document.getElementById('shrinkageOutletFilter').value;
+  return shrinkageData.filter(r =>
+    (qtr    === 'all' || r.quarter === qtr) &&
+    (outlet === 'all' || r.outlet  === outlet)
+  );
+}
+
+function applyShrinkageFilters() {
+  renderShrinkageTable(getFilteredShrinkage());
+}
+
+function renderShrinkageTable(data) {
+  document.getElementById('shrinkageCount').textContent = data.length + ' rows';
+  if (!data.length) {
+    document.getElementById('shrinkageBody').innerHTML =
+      '<tr><td colspan="6"><div class="empty">No data matches the selected filters.</div></td></tr>';
+    return;
+  }
+  document.getElementById('shrinkageBody').innerHTML = data.map(r => {
+    const pct   = parseFloat(r.shrPct);
+    const pctColor = !isNaN(pct) ? (pct < 0 ? '#a32d2d' : '#2a5c14') : '#1a1a1a';
+    const val   = parseFloat(r.shrVal);
+    const valColor = !isNaN(val) ? (val < 0 ? '#a32d2d' : '#2a5c14') : '#1a1a1a';
+    const qty   = parseFloat(r.shrQty);
+    const qtyColor = !isNaN(qty) ? (qty < 0 ? '#a32d2d' : '#2a5c14') : '#1a1a1a';
+    const saleNum = parseFloat(r.sale);
+    const saleStr = !isNaN(saleNum) ? saleNum.toLocaleString('en-IN') : r.sale;
+    return `<tr>
+      <td style="font-weight:600">${r.outlet}</td>
+      <td style="color:#6b6b68">${r.quarter}</td>
+      <td style="color:${pctColor};font-weight:600">${r.shrPct}</td>
+      <td style="color:${valColor};font-weight:600">${r.shrVal}</td>
+      <td style="color:${qtyColor};font-weight:600">${r.shrQty}</td>
+      <td style="font-weight:600">${saleStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportShrinkageCSV() {
+  const data = getFilteredShrinkage();
+  if (!data.length) return;
+  const headers = ['Outlet Name','Quarter','Shrinkage %','Shrinkage Value','Shrinkage Qty','Store Sale'];
+  const rows = data.map(r =>
+    [r.outlet, r.quarter, r.shrPct, r.shrVal, r.shrQty, r.sale]
+      .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
+  );
+  const csv = [headers.join(','), ...rows].join('\n');
+  const a   = document.createElement('a');
+  a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_shrinkage_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
 }
 
 function renderIssuesTable(data) {
