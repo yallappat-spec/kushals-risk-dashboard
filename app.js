@@ -663,7 +663,13 @@ async function loadIssuesSheet() {
     const res = await fetch(csvUrl);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    issuesData = parseIssuesCSV(text);
+    const storeMap = {};
+    activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
+    issuesData = parseIssuesCSV(text).map(r => ({
+      ...r,
+      cm: storeMap[r.store]?.cm || '-',
+      rm: storeMap[r.store]?.rm || '-',
+    }));
     rebuildIssuesFilters();
     applyIssuesFilters();
     showIssuesStatus('', '');
@@ -738,17 +744,23 @@ function rebuildIssuesFilters() {
     if (values.includes(cur)) sel.value = cur;
   }
   rebuild('issueStoreFilter',   [...new Set(issuesData.map(r => r.store))].sort());
+  rebuild('issueCmFilter',      [...new Set(issuesData.map(r => r.cm).filter(v => v && v !== '-'))].sort());
+  rebuild('issueRmFilter',      [...new Set(issuesData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
   rebuild('issuePeriodFilter',  [...new Set(issuesData.map(r => r.period).filter(v => v !== '-'))]);
   rebuild('issueSectionFilter', [...new Set(issuesData.map(r => r.section).filter(v => v !== '-'))].sort());
 }
 
 function getFilteredIssues() {
   const store   = document.getElementById('issueStoreFilter').value;
+  const cm      = document.getElementById('issueCmFilter').value;
+  const rm      = document.getElementById('issueRmFilter').value;
   const period  = document.getElementById('issuePeriodFilter').value;
   const section = document.getElementById('issueSectionFilter').value;
   const risk    = document.getElementById('issueRiskFilter').value;
   return issuesData.filter(r =>
     (store   === 'all' || r.store   === store)   &&
+    (cm      === 'all' || r.cm      === cm)      &&
+    (rm      === 'all' || r.rm      === rm)      &&
     (period  === 'all' || r.period  === period)  &&
     (section === 'all' || r.section === section) &&
     (risk    === 'all' || r.risk    === risk)
