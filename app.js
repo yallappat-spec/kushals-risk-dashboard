@@ -776,25 +776,14 @@ function renderIssuesTable(data) {
   document.getElementById('issuesCount').textContent = data.length + ' issues';
   if (!data.length) {
     document.getElementById('issuesBody').innerHTML =
-      '<tr><td colspan="10"><div class="empty">No issues match the selected filters.</div></td></tr>';
+      '<tr><td colspan="3"><div class="empty">No issues match the selected filters.</div></td></tr>';
     return;
   }
-  document.getElementById('issuesBody').innerHTML = data.map(r => {
-    const badge = r.risk === 'High' ? 'rh' : r.risk === 'Medium' ? 'rm' : r.risk === 'Low' ? 'rl' : 'rp';
-    const ptColor = (r.pointsLost !== '-' && r.pointsLost !== '0') ? '#a32d2d' : '#2a5c14';
-    return `<tr>
-      <td style="font-weight:600">${r.store}</td>
-      <td style="color:#6b6b68">${r.period}</td>
-      <td style="font-weight:600">${r.score}</td>
-      <td>${r.section}</td>
-      <td class="issues-clause">${r.clause}</td>
-      <td><span class="rb ${badge}">${r.risk}</span></td>
-      <td style="text-align:center">${r.wtMax}</td>
-      <td style="text-align:center">${r.rating}</td>
-      <td style="text-align:center;color:${ptColor};font-weight:600">${r.pointsLost}</td>
+  document.getElementById('issuesBody').innerHTML = data.map(r => `<tr>
+      <td style="font-weight:600;white-space:nowrap">${r.store}</td>
+      <td style="color:#6b6b68;white-space:nowrap">${r.period}</td>
       <td class="issues-obs">${r.obs}</td>
-    </tr>`;
-  }).join('');
+    </tr>`).join('');
 }
 
 function exportIssuesCSV() {
