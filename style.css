@@ -437,6 +437,23 @@ body {
   padding: 12px 14px;
 }
 
+.kpi-clickable {
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.kpi-clickable:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  border-color: #b0afa8;
+  transform: translateY(-1px);
+}
+
+.kpi-active {
+  border-color: #4a7c59;
+  box-shadow: 0 0 0 2px rgba(74,124,89,0.20);
+  background: #f4faf6;
+}
+
 .kpi-label {
   font-size: 12px;
   color: #6b6b68;
