@@ -11,6 +11,7 @@ let shrinkageData = [];
 let bChart = null;
 let pChart = null;
 let rmChart = null;
+let cardFilter    = null; // 'high' | 'medium' | 'low' | 'shrinkage' | 'fraud' | 'ops' | null
 
 /* Default Google Sheet — always loaded on page open */
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1T7BMVcRLxLOL6HA4FiJMHPHJch6d05xeWzWTx_XqDIw/edit?usp=sharing';
@@ -391,7 +392,14 @@ function getFiltered() {
     (cm    === 'all' || s.cm    === cm) &&
     (rm    === 'all' || s.rm    === rm) &&
     (month === 'all' || s.month === month) &&
-    (risk  === 'all' || s.level === risk)
+    (risk  === 'all' || s.level === risk) &&
+    (cardFilter === null          ||
+     (cardFilter === 'high'      && s.level === 'High') ||
+     (cardFilter === 'medium'    && s.level === 'Medium') ||
+     (cardFilter === 'low'       && s.level === 'Low') ||
+     (cardFilter === 'shrinkage' && s.shrinkPts > 0) ||
+     (cardFilter === 'fraud'     && s.fraud) ||
+     (cardFilter === 'ops'       && s.opsPts > 0))
   );
 
   if      (sort === 'risk')      data.sort((a, b) => b.total - a.total);
@@ -400,6 +408,14 @@ function getFiltered() {
   else                           data.sort((a, b) => a.store.localeCompare(b.store));
 
   return data;
+}
+
+function setCardFilter(key) {
+  cardFilter = (cardFilter === key) ? null : key;
+  applyFilters();
+  if (cardFilter !== null) {
+    document.getElementById('storeCount')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function applyFilters() {
@@ -422,38 +438,39 @@ function renderKPIs(data) {
   const fr = data.filter(s => s.fraud).length;
   const ow = scored.filter(s => s.opsPts > 0).length;
 
+  const cf = cardFilter;
   document.getElementById('kpiGrid').innerHTML = `
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === null ? ' kpi-active' : ''}" onclick="setCardFilter(null)">
       <div class="kpi-label">Stores in view</div>
       <div class="kpi-val">${data.length}</div>
       <div class="kpi-sub">filtered selection</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === 'high' ? ' kpi-active' : ''}" onclick="setCardFilter('high')">
       <div class="kpi-label">High risk</div>
       <div class="kpi-val cr">${h}</div>
       <div class="kpi-sub cr">${Math.round(h / n * 100)}% of stores</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === 'medium' ? ' kpi-active' : ''}" onclick="setCardFilter('medium')">
       <div class="kpi-label">Medium risk</div>
       <div class="kpi-val ca">${m}</div>
       <div class="kpi-sub" style="color:#6b6b68">${Math.round(m / n * 100)}% of stores</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === 'low' ? ' kpi-active' : ''}" onclick="setCardFilter('low')">
       <div class="kpi-label">Low risk</div>
       <div class="kpi-val cg">${l}</div>
       <div class="kpi-sub" style="color:#6b6b68">${Math.round(l / n * 100)}% of stores</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === 'shrinkage' ? ' kpi-active' : ''}" onclick="setCardFilter('shrinkage')">
       <div class="kpi-label">Shrinkage risk</div>
       <div class="kpi-val cr">${sr}</div>
       <div class="kpi-sub" style="color:#6b6b68">stores &gt; 0.075%</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === 'fraud' ? ' kpi-active' : ''}" onclick="setCardFilter('fraud')">
       <div class="kpi-label">Fraud cases</div>
       <div class="kpi-val ${fr > 5 ? 'cr' : fr > 2 ? 'ca' : 'cg'}">${fr}</div>
       <div class="kpi-sub" style="color:#6b6b68">stores affected</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card kpi-clickable${cf === 'ops' ? ' kpi-active' : ''}" onclick="setCardFilter('ops')">
       <div class="kpi-label">Ops below 90%</div>
       <div class="kpi-val ${ow > 10 ? 'cr' : ow > 5 ? 'ca' : 'cg'}">${ow}</div>
       <div class="kpi-sub" style="color:#6b6b68">need attention</div>
