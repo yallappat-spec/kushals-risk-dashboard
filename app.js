@@ -1287,8 +1287,8 @@ function renderShortageAnalysis(data) {
     if (!isNaN(aq)) map[item].adjQty += aq;
   });
 
-  /* Sort by Stk Value descending */
-  const items = Object.entries(map).sort((a, b) => b[1].stkVal - a[1].stkVal);
+  /* Sort by Stk Value ascending (most negative first) */
+  const items = Object.entries(map).sort((a, b) => a[1].stkVal - b[1].stkVal);
 
   const totalStkVal = items.reduce((s, [, v]) => s + v.stkVal, 0);
   const totalAdjQty = items.reduce((s, [, v]) => s + v.adjQty, 0);
