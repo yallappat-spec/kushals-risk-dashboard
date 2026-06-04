@@ -10,6 +10,7 @@ let issuesData    = [];
 let shrinkageData = [];
 let shortageData  = [];
 let shortageHeaders = [];
+let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
 let pChart = null;
 let rmChart = null;
@@ -1179,6 +1180,7 @@ async function loadShortageSheet() {
     const parsed = parseShortageCSV(text, storeMap);
     shortageData    = parsed.rows;
     shortageHeaders = parsed.headers;
+    shortageColIdx  = { iItemName: parsed.iItemName, iStkVal: parsed.iStkVal, iAdjQty: parsed.iAdjQty };
     rebuildShortageFilters();
     applyShortageFilters();
     showShortageStatus('', '');
@@ -1202,6 +1204,9 @@ function parseShortageCSV(text, storeMap) {
   const iStore    = col('storename', 'store', 'outletname', 'outlet');
   const iCategory = col('category', 'itemcategory', 'itemtype', 'type');
   const iPeriod   = col('period', 'month', 'quarter', 'date');
+  const iItemName = col('itemname', 'item', 'itemdesc', 'description', 'productname', 'product');
+  const iStkVal   = col('stkvalue(mrp)', 'stkvaluemrp', 'stkvalue', 'stockvalue', 'mrpvalue', 'mrp');
+  const iAdjQty   = col('adjqty', 'adjustedqty', 'adjustedquantity', 'adjquantity');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
@@ -1213,9 +1218,12 @@ function parseShortageCSV(text, storeMap) {
     rawHdrs.forEach((h, idx) => { row[h] = c[idx] !== undefined ? c[idx] : '-'; });
     row._category = iCategory !== -1 ? (c[iCategory] || '-') : '-';
     row._period   = iPeriod   !== -1 ? (c[iPeriod]   || '-') : '-';
+    row._itemName = iItemName !== -1 ? (c[iItemName] || '-') : '-';
+    row._stkVal   = iStkVal   !== -1 ? c[iStkVal]   : null;
+    row._adjQty   = iAdjQty   !== -1 ? c[iAdjQty]   : null;
     rows.push(row);
   }
-  return { headers: rawHdrs, rows };
+  return { headers: rawHdrs, rows, iItemName, iStkVal, iAdjQty };
 }
 
 function rebuildShortageFilters() {
@@ -1249,7 +1257,75 @@ function getFilteredShortage() {
 }
 
 function applyShortageFilters() {
-  renderShortageTable(getFilteredShortage());
+  const data = getFilteredShortage();
+  renderShortageAnalysis(data);
+  renderShortageTable(data);
+}
+
+function renderShortageAnalysis(data) {
+  const el = document.getElementById('shortageAnalysis');
+  if (!el) return;
+
+  const hasItem   = shortageColIdx.iItemName !== -1;
+  const hasStkVal = shortageColIdx.iStkVal   !== -1;
+  const hasAdjQty = shortageColIdx.iAdjQty   !== -1;
+
+  if (!hasItem || (!hasStkVal && !hasAdjQty) || !data.length) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+
+  /* Group by item name, sum Stk Value (MRP) and Adj Qty */
+  const map = {};
+  data.forEach(r => {
+    const item = r._itemName !== '-' ? r._itemName : '(Unknown)';
+    if (!map[item]) map[item] = { stkVal: 0, adjQty: 0 };
+    const sv = parseFloat(String(r._stkVal).replace(/,/g, ''));
+    const aq = parseFloat(String(r._adjQty).replace(/,/g, ''));
+    if (!isNaN(sv)) map[item].stkVal += sv;
+    if (!isNaN(aq)) map[item].adjQty += aq;
+  });
+
+  /* Sort by Stk Value descending */
+  const items = Object.entries(map).sort((a, b) => b[1].stkVal - a[1].stkVal);
+
+  const totalStkVal = items.reduce((s, [, v]) => s + v.stkVal, 0);
+  const totalAdjQty = items.reduce((s, [, v]) => s + v.adjQty, 0);
+
+  const fmtVal = v => v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtQty = v => v.toLocaleString('en-IN', { minimumFractionDigits: 0,  maximumFractionDigits: 2 });
+  const qtyColor = v => v < 0 ? '#a32d2d' : v > 0 ? '#2a5c14' : '#1a1a1a';
+
+  el.innerHTML = `
+    <div class="sec-hdr" style="margin-bottom:12px">
+      <div class="sec-title">Item-wise Analysis — Stk Value (MRP) &amp; Adj Qty</div>
+      <div style="display:flex;gap:16px;font-size:13px;font-weight:600">
+        <span style="color:#4a7fcb">Total Stk Value: ₹${fmtVal(totalStkVal)}</span>
+        <span style="color:${qtyColor(totalAdjQty)}">Total Adj Qty: ${fmtQty(totalAdjQty)}</span>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Item Name</th>
+          ${hasStkVal ? '<th style="text-align:right">Stk Value (MRP) ₹</th>' : ''}
+          ${hasAdjQty ? '<th style="text-align:right">Adj Qty</th>' : ''}
+        </tr></thead>
+        <tbody>
+          ${items.map(([item, v]) => `<tr>
+            <td style="font-weight:600">${item}</td>
+            ${hasStkVal ? `<td style="text-align:right;font-weight:600;color:#4a7fcb">${fmtVal(v.stkVal)}</td>` : ''}
+            ${hasAdjQty ? `<td style="text-align:right;font-weight:600;color:${qtyColor(v.adjQty)}">${fmtQty(v.adjQty)}</td>` : ''}
+          </tr>`).join('')}
+          <tr style="background:#f5f4f0;font-weight:700;border-top:2px solid #ccc">
+            <td>TOTAL</td>
+            ${hasStkVal ? `<td style="text-align:right;color:#4a7fcb">₹${fmtVal(totalStkVal)}</td>` : ''}
+            ${hasAdjQty ? `<td style="text-align:right;color:${qtyColor(totalAdjQty)}">${fmtQty(totalAdjQty)}</td>` : ''}
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function renderShortageTable(data) {

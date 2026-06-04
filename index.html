@@ -303,8 +303,11 @@
       <select id="shortagePeriodFilter"   onchange="applyShortageFilters()"><option value="all">All</option></select>
     </div>
 
+    <!-- Item-wise analysis (rendered by JS) -->
+    <div id="shortageAnalysis" style="margin-bottom:20px;display:none"></div>
+
     <div class="sec-hdr">
-      <div class="sec-title">Shortage Items</div>
+      <div class="sec-title">Shortage Items — Full Data</div>
       <div style="display:flex;align-items:center;gap:12px">
         <div class="sec-count" id="shortageCount"></div>
         <button class="btn-export" onclick="exportShortageCSV()">&#8595; Export CSV</button>
