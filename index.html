@@ -24,6 +24,7 @@
     <button class="ptab active" id="ptab-risk"      onclick="switchPageTab('risk')">&#128202; Risk Dashboard</button>
     <button class="ptab"        id="ptab-issues"    onclick="switchPageTab('issues')">&#128203; Store Issues</button>
     <button class="ptab"        id="ptab-shrinkage" onclick="switchPageTab('shrinkage')">&#128200; Shrinkage %</button>
+    <button class="ptab"        id="ptab-shortage"  onclick="switchPageTab('shortage')">&#128230; Shortage Items</button>
   </div>
 
   <!-- ===== DATA SOURCE BAR ===== -->
@@ -283,6 +284,46 @@
     <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Shrinkage % Data</div>
 
   </div><!-- end pageShrinkage -->
+
+  <!-- ===== SHORTAGE ITEMS TAB ===== -->
+  <div id="pageShortage" style="display:none">
+
+    <div id="shortageStatus" class="upload-status" style="margin-bottom:12px"></div>
+
+    <div class="filter-row">
+      <label>Store:</label>
+      <select id="shortageStoreFilter"    onchange="applyShortageFilters()"><option value="all">All</option></select>
+      <label>CM Name:</label>
+      <select id="shortageCmFilter"       onchange="applyShortageFilters()"><option value="all">All</option></select>
+      <label>RM Name:</label>
+      <select id="shortageRmFilter"       onchange="applyShortageFilters()"><option value="all">All</option></select>
+      <label>Category:</label>
+      <select id="shortageCategoryFilter" onchange="applyShortageFilters()"><option value="all">All</option></select>
+      <label>Period:</label>
+      <select id="shortagePeriodFilter"   onchange="applyShortageFilters()"><option value="all">All</option></select>
+    </div>
+
+    <!-- Item-wise analysis (rendered by JS) -->
+    <div id="shortageAnalysis" style="margin-bottom:20px;display:none"></div>
+
+    <div class="sec-hdr">
+      <div class="sec-title">Shortage Items — Full Data</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="shortageCount"></div>
+        <button class="btn-export" onclick="exportShortageCSV()">&#8595; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table id="shortageTable">
+        <thead id="shortageHead"></thead>
+        <tbody id="shortageBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Shortage Items</div>
+
+  </div><!-- end pageShortage -->
 
 </div>
 
