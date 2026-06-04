@@ -1237,7 +1237,7 @@ function rebuildShortageFilters() {
   rebuild('shortageStoreFilter',    [...new Set(shortageData.map(r => r._store).filter(v => v))].sort());
   rebuild('shortageCmFilter',       [...new Set(shortageData.map(r => r._cm).filter(v => v && v !== '-'))].sort());
   rebuild('shortageRmFilter',       [...new Set(shortageData.map(r => r._rm).filter(v => v && v !== '-'))].sort());
-  rebuild('shortageCategoryFilter', [...new Set(shortageData.map(r => r._category).filter(v => v && v !== '-'))].sort());
+  rebuild('shortageItemFilter',     [...new Set(shortageData.map(r => r._itemName).filter(v => v && v !== '-'))].sort());
   rebuild('shortagePeriodFilter',   [...new Set(shortageData.map(r => r._period).filter(v => v && v !== '-'))]);
 }
 
@@ -1245,13 +1245,13 @@ function getFilteredShortage() {
   const store    = document.getElementById('shortageStoreFilter').value;
   const cm       = document.getElementById('shortageCmFilter').value;
   const rm       = document.getElementById('shortageRmFilter').value;
-  const category = document.getElementById('shortageCategoryFilter').value;
+  const category = document.getElementById('shortageItemFilter').value;
   const period   = document.getElementById('shortagePeriodFilter').value;
   return shortageData.filter(r =>
     (store    === 'all' || r._store    === store)    &&
     (cm       === 'all' || r._cm       === cm)       &&
     (rm       === 'all' || r._rm       === rm)       &&
-    (category === 'all' || r._category === category) &&
+    (category === 'all' || r._itemName === category) &&
     (period   === 'all' || r._period   === period)
   );
 }
