@@ -1267,13 +1267,21 @@ function applyShortageFilters() {
   renderShortageAnalysis(getFilteredShortage());
 }
 
+function _parseNum(val) {
+  if (val === null || val === undefined) return NaN;
+  const s = String(val).trim().replace(/,/g, '').replace(/\s/g, '');
+  /* handle parentheses for negatives e.g. (123) → -123 */
+  if (/^\([\d.]+\)$/.test(s)) return -parseFloat(s.slice(1, -1));
+  return parseFloat(s);
+}
+
 function _shortageGroup(data, keyFn) {
   const map = {};
   data.forEach(r => {
     const key = keyFn(r) || '(Unknown)';
     if (!map[key]) map[key] = { stkVal: 0, adjQty: 0, count: 0 };
-    const sv = parseFloat(String(r._stkVal).replace(/,/g, ''));
-    const aq = parseFloat(String(r._adjQty).replace(/,/g, ''));
+    const sv = _parseNum(r._stkVal);
+    const aq = _parseNum(r._adjQty);
     if (!isNaN(sv)) map[key].stkVal += sv;
     if (!isNaN(aq)) map[key].adjQty += aq;
     map[key].count++;
@@ -1349,8 +1357,8 @@ function renderShortageAnalysis(data) {
     else {
       let totalStkVal = 0, totalAdjQty = 0;
       data.forEach(r => {
-        const sv = parseFloat(String(r._stkVal).replace(/,/g, ''));
-        const aq = parseFloat(String(r._adjQty).replace(/,/g, ''));
+        const sv = _parseNum(r._stkVal);
+        const aq = _parseNum(r._adjQty);
         if (!isNaN(sv)) totalStkVal += sv;
         if (!isNaN(aq)) totalAdjQty += aq;
       });
@@ -1403,33 +1411,22 @@ function renderShortageAnalysis(data) {
     el.style.display = 'none';
   }
 
-  /* Style & Brand side-by-side */
-  if (el2 && (hasStyle || hasBrand || hasOutlet)) {
+  /* Cluster-wise & RM-wise side-by-side */
+  if (el2) {
     el2.style.display = '';
     let panels = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">';
 
-    if (hasStyle) {
-      const rows = _shortageGroup(data, r => r._style);
-      const tot  = rows.reduce((s,[,v])=>s+v.stkVal,0);
-      const totQ = rows.reduce((s,[,v])=>s+v.adjQty,0);
-      panels += `<div>${_shortageAnalysisTable('Style-wise Breakdown', rows, tot, totQ, 'Style')}</div>`;
-    }
-    if (hasBrand) {
-      const rows = _shortageGroup(data, r => r._brand);
-      const tot  = rows.reduce((s,[,v])=>s+v.stkVal,0);
-      const totQ = rows.reduce((s,[,v])=>s+v.adjQty,0);
-      panels += `<div>${_shortageAnalysisTable('Brand-wise Breakdown', rows, tot, totQ, 'Brand')}</div>`;
-    }
-    if (hasOutlet) {
-      const rows = _shortageGroup(data, r => r._outlet);
-      const tot  = rows.reduce((s,[,v])=>s+v.stkVal,0);
-      const totQ = rows.reduce((s,[,v])=>s+v.adjQty,0);
-      panels += `<div>${_shortageAnalysisTable('Store-wise Breakdown', rows, tot, totQ, 'Outlet Name')}</div>`;
-    }
+    const cmRows = _shortageGroup(data, r => r._cm !== '-' ? r._cm : '(Unassigned)');
+    const cmTot  = cmRows.reduce((s,[,v])=>s+v.stkVal,0);
+    const cmTotQ = cmRows.reduce((s,[,v])=>s+v.adjQty,0);
+    panels += `<div>${_shortageAnalysisTable('Cluster-wise Breakdown', cmRows, cmTot, cmTotQ, 'Cluster Manager')}</div>`;
+
+    const rmRows = _shortageGroup(data, r => r._rm !== '-' ? r._rm : '(Unassigned)');
+    const rmTot  = rmRows.reduce((s,[,v])=>s+v.stkVal,0);
+    const rmTotQ = rmRows.reduce((s,[,v])=>s+v.adjQty,0);
+    panels += `<div>${_shortageAnalysisTable('RM-wise Breakdown', rmRows, rmTot, rmTotQ, 'Regional Manager')}</div>`;
 
     panels += '</div>';
     el2.innerHTML = panels;
-  } else if (el2) {
-    el2.style.display = 'none';
   }
 }
