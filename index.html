@@ -303,20 +303,14 @@
       <select id="shortagePeriodFilter"   onchange="applyShortageFilters()"><option value="all">All</option></select>
     </div>
 
-    <!-- Item-wise analysis (rendered by JS) -->
-    <div id="shortageAnalysis" style="margin-bottom:20px;display:none"></div>
+    <!-- Summary KPI strip -->
+    <div id="shortageKpis" style="display:none;margin-bottom:20px"></div>
 
-    <div class="sec-hdr">
-      <div class="sec-title">Shortage Items — Full Data</div>
-      <div class="sec-count" id="shortageCount"></div>
-    </div>
+    <!-- Analysis panels (rendered by JS) -->
+    <div id="shortageAnalysis" style="display:none;margin-bottom:20px"></div>
 
-    <div class="tbl-wrap">
-      <table id="shortageTable">
-        <thead id="shortageHead"></thead>
-        <tbody id="shortageBody"></tbody>
-      </table>
-    </div>
+    <!-- Style & Brand analysis row -->
+    <div id="shortageAnalysis2" style="display:none;margin-bottom:20px;display:none"></div>
 
     <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Shortage Items</div>
 

@@ -1180,7 +1180,8 @@ async function loadShortageSheet() {
     const parsed = parseShortageCSV(text, storeMap);
     shortageData    = parsed.rows;
     shortageHeaders = parsed.headers;
-    shortageColIdx  = { iItemName: parsed.iItemName, iStkVal: parsed.iStkVal, iAdjQty: parsed.iAdjQty };
+    shortageColIdx  = { iItemName: parsed.iItemName, iStkVal: parsed.iStkVal, iAdjQty: parsed.iAdjQty,
+                        iStyle: parsed.iStyle, iBrand: parsed.iBrand, iOutlet: parsed.iOutlet };
     rebuildShortageFilters();
     applyShortageFilters();
     showShortageStatus('', '');
@@ -1203,10 +1204,13 @@ function parseShortageCSV(text, storeMap) {
 
   const iStore    = col('storename', 'store', 'outletname', 'outlet');
   const iCategory = col('category', 'itemcategory', 'itemtype', 'type');
-  const iPeriod   = col('period', 'month', 'quarter', 'date');
+  const iPeriod   = col('period', 'month', 'quarter', 'date', 'qtr');
   const iItemName = col('itemname', 'item', 'itemdesc', 'description', 'productname', 'product');
   const iStkVal   = col('stkvalue(mrp)', 'stkvaluemrp', 'stkvalue', 'stockvalue', 'mrpvalue', 'mrp');
   const iAdjQty   = col('adjqty', 'adjustedqty', 'adjustedquantity', 'adjquantity');
+  const iStyle    = col('style', 'stylename', 'styletype');
+  const iBrand    = col('brand', 'brandname');
+  const iOutlet   = col('outletname', 'outlet', 'storename', 'store');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
@@ -1221,9 +1225,12 @@ function parseShortageCSV(text, storeMap) {
     row._itemName = iItemName !== -1 ? (c[iItemName] || '-') : '-';
     row._stkVal   = iStkVal   !== -1 ? c[iStkVal]   : null;
     row._adjQty   = iAdjQty   !== -1 ? c[iAdjQty]   : null;
+    row._style    = iStyle    !== -1 ? (c[iStyle]    || '-') : '-';
+    row._brand    = iBrand    !== -1 ? (c[iBrand]    || '-') : '-';
+    row._outlet   = iOutlet   !== -1 ? (c[iOutlet]   || '-') : '-';
     rows.push(row);
   }
-  return { headers: rawHdrs, rows, iItemName, iStkVal, iAdjQty };
+  return { headers: rawHdrs, rows, iItemName, iStkVal, iAdjQty, iStyle, iBrand, iOutlet };
 }
 
 function rebuildShortageFilters() {
@@ -1257,106 +1264,172 @@ function getFilteredShortage() {
 }
 
 function applyShortageFilters() {
-  const data = getFilteredShortage();
-  renderShortageAnalysis(data);
-  renderShortageTable(data);
+  renderShortageAnalysis(getFilteredShortage());
 }
 
-function renderShortageAnalysis(data) {
-  const el = document.getElementById('shortageAnalysis');
-  if (!el) return;
-
-  const hasItem   = shortageColIdx.iItemName !== -1;
-  const hasStkVal = shortageColIdx.iStkVal   !== -1;
-  const hasAdjQty = shortageColIdx.iAdjQty   !== -1;
-
-  if (!hasItem || (!hasStkVal && !hasAdjQty) || !data.length) {
-    el.style.display = 'none';
-    return;
-  }
-  el.style.display = '';
-
-  /* Group by item name, sum Stk Value (MRP) and Adj Qty */
+function _shortageGroup(data, keyFn) {
   const map = {};
   data.forEach(r => {
-    const item = r._itemName !== '-' ? r._itemName : '(Unknown)';
-    if (!map[item]) map[item] = { stkVal: 0, adjQty: 0 };
+    const key = keyFn(r) || '(Unknown)';
+    if (!map[key]) map[key] = { stkVal: 0, adjQty: 0, count: 0 };
     const sv = parseFloat(String(r._stkVal).replace(/,/g, ''));
     const aq = parseFloat(String(r._adjQty).replace(/,/g, ''));
-    if (!isNaN(sv)) map[item].stkVal += sv;
-    if (!isNaN(aq)) map[item].adjQty += aq;
+    if (!isNaN(sv)) map[key].stkVal += sv;
+    if (!isNaN(aq)) map[key].adjQty += aq;
+    map[key].count++;
   });
+  return Object.entries(map).sort((a, b) => a[1].stkVal - b[1].stkVal);
+}
 
-  /* Sort by Stk Value ascending (most negative first) */
-  const items = Object.entries(map).sort((a, b) => a[1].stkVal - b[1].stkVal);
+function _shortageAnalysisTable(title, rows, totalStkVal, totalAdjQty, labelHeader) {
+  const fmtVal  = v => v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtQty  = v => v.toLocaleString('en-IN', { minimumFractionDigits: 0,  maximumFractionDigits: 2 });
+  const valCol  = v => v < 0 ? '#a32d2d' : v > 0 ? '#2a5c14' : '#555';
+  const qtyCol  = v => v < 0 ? '#a32d2d' : v > 0 ? '#2a5c14' : '#555';
+  const pctBar  = (v, total) => {
+    const pct = total !== 0 ? Math.abs(v / total) * 100 : 0;
+    const color = v < 0 ? '#e24b4a' : '#639922';
+    return `<div style="display:flex;align-items:center;gap:6px">
+      <div style="flex:1;background:#eee;border-radius:3px;height:6px;min-width:60px">
+        <div style="width:${Math.min(pct,100).toFixed(1)}%;background:${color};height:6px;border-radius:3px"></div>
+      </div>
+      <span style="font-size:11px;color:#888;min-width:36px">${pct.toFixed(1)}%</span>
+    </div>`;
+  };
 
-  const totalStkVal = items.reduce((s, [, v]) => s + v.stkVal, 0);
-  const totalAdjQty = items.reduce((s, [, v]) => s + v.adjQty, 0);
-
-  const fmtVal = v => v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtQty = v => v.toLocaleString('en-IN', { minimumFractionDigits: 0,  maximumFractionDigits: 2 });
-  const qtyColor = v => v < 0 ? '#a32d2d' : v > 0 ? '#2a5c14' : '#1a1a1a';
-
-  el.innerHTML = `
-    <div class="sec-hdr" style="margin-bottom:12px">
-      <div class="sec-title">Item-wise Analysis — Stk Value (MRP) &amp; Adj Qty</div>
+  return `
+    <div class="sec-hdr" style="margin-bottom:10px">
+      <div class="sec-title">${title}</div>
       <div style="display:flex;gap:16px;font-size:13px;font-weight:600">
-        <span style="color:#4a7fcb">Total Stk Value: ₹${fmtVal(totalStkVal)}</span>
-        <span style="color:${qtyColor(totalAdjQty)}">Total Adj Qty: ${fmtQty(totalAdjQty)}</span>
+        <span style="color:${valCol(totalStkVal)}">Total: ₹${fmtVal(totalStkVal)}</span>
+        <span style="color:${qtyCol(totalAdjQty)}">Adj Qty: ${fmtQty(totalAdjQty)}</span>
       </div>
     </div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" style="margin-bottom:0">
       <table>
         <thead><tr>
-          <th>Item Name</th>
-          ${hasStkVal ? '<th style="text-align:right">Stk Value (MRP) ₹</th>' : ''}
-          ${hasAdjQty ? '<th style="text-align:right">Adj Qty</th>' : ''}
+          <th>${labelHeader}</th>
+          <th style="text-align:right">Stk Value (MRP) ₹</th>
+          <th style="text-align:right">Adj Qty</th>
+          <th>Share of Loss</th>
+          <th style="text-align:right">Count</th>
         </tr></thead>
         <tbody>
-          ${items.map(([item, v]) => `<tr>
-            <td style="font-weight:600">${item}</td>
-            ${hasStkVal ? `<td style="text-align:right;font-weight:600;color:#4a7fcb">${fmtVal(v.stkVal)}</td>` : ''}
-            ${hasAdjQty ? `<td style="text-align:right;font-weight:600;color:${qtyColor(v.adjQty)}">${fmtQty(v.adjQty)}</td>` : ''}
+          ${rows.map(([label, v]) => `<tr>
+            <td style="font-weight:600">${label}</td>
+            <td style="text-align:right;font-weight:600;color:${valCol(v.stkVal)}">${fmtVal(v.stkVal)}</td>
+            <td style="text-align:right;font-weight:600;color:${qtyCol(v.adjQty)}">${fmtQty(v.adjQty)}</td>
+            <td>${pctBar(v.stkVal, totalStkVal)}</td>
+            <td style="text-align:right;color:#888">${v.count}</td>
           </tr>`).join('')}
           <tr style="background:#f5f4f0;font-weight:700;border-top:2px solid #ccc">
             <td>TOTAL</td>
-            ${hasStkVal ? `<td style="text-align:right;color:#4a7fcb">₹${fmtVal(totalStkVal)}</td>` : ''}
-            ${hasAdjQty ? `<td style="text-align:right;color:${qtyColor(totalAdjQty)}">${fmtQty(totalAdjQty)}</td>` : ''}
+            <td style="text-align:right;color:${valCol(totalStkVal)}">₹${fmtVal(totalStkVal)}</td>
+            <td style="text-align:right;color:${qtyCol(totalAdjQty)}">${fmtQty(totalAdjQty)}</td>
+            <td></td>
+            <td style="text-align:right;color:#888">${rows.reduce((s,[,v])=>s+v.count,0)}</td>
           </tr>
         </tbody>
       </table>
     </div>`;
 }
 
-function renderShortageTable(data) {
-  document.getElementById('shortageCount').textContent = data.length + ' rows';
+function renderShortageAnalysis(data) {
+  const hasStkVal = shortageColIdx.iStkVal  !== -1;
+  const hasAdjQty = shortageColIdx.iAdjQty  !== -1;
+  const hasItem   = shortageColIdx.iItemName !== -1;
+  const hasStyle  = shortageColIdx.iStyle    !== -1;
+  const hasBrand  = shortageColIdx.iBrand    !== -1;
+  const hasOutlet = shortageColIdx.iOutlet   !== -1;
 
-  const thead = document.getElementById('shortageHead');
-  if (shortageHeaders.length) {
-    thead.innerHTML = '<tr>' + shortageHeaders.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  /* KPI strip */
+  const kpiEl = document.getElementById('shortageKpis');
+  if (kpiEl) {
+    if (!data.length) { kpiEl.style.display = 'none'; }
+    else {
+      let totalStkVal = 0, totalAdjQty = 0;
+      data.forEach(r => {
+        const sv = parseFloat(String(r._stkVal).replace(/,/g, ''));
+        const aq = parseFloat(String(r._adjQty).replace(/,/g, ''));
+        if (!isNaN(sv)) totalStkVal += sv;
+        if (!isNaN(aq)) totalAdjQty += aq;
+      });
+      const fmtVal = v => v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const valCol = v => v < 0 ? '#a32d2d' : v > 0 ? '#2a5c14' : '#555';
+      const uniqueItems   = new Set(data.map(r => r._itemName)).size;
+      const uniqueStores  = new Set(data.map(r => r._outlet || r._store)).size;
+      kpiEl.style.display = '';
+      kpiEl.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+        <div class="kpi-card" style="flex:1;min-width:160px;cursor:default">
+          <div class="kpi-label">Total Stk Value (MRP)</div>
+          <div class="kpi-val" style="color:${valCol(totalStkVal)}">₹${fmtVal(totalStkVal)}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:160px;cursor:default">
+          <div class="kpi-label">Total Adj Qty</div>
+          <div class="kpi-val" style="color:${valCol(totalAdjQty)}">${totalAdjQty.toLocaleString('en-IN')}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:160px;cursor:default">
+          <div class="kpi-label">Total Records</div>
+          <div class="kpi-val">${data.length.toLocaleString('en-IN')}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:160px;cursor:default">
+          <div class="kpi-label">Unique Items</div>
+          <div class="kpi-val">${uniqueItems}</div>
+        </div>
+        <div class="kpi-card" style="flex:1;min-width:160px;cursor:default">
+          <div class="kpi-label">Stores Affected</div>
+          <div class="kpi-val">${uniqueStores}</div>
+        </div>
+      </div>`;
+    }
   }
 
-  if (!data.length) {
-    document.getElementById('shortageBody').innerHTML =
-      `<tr><td colspan="${shortageHeaders.length || 1}"><div class="empty">No data matches the selected filters.</div></td></tr>`;
+  const el = document.getElementById('shortageAnalysis');
+  const el2 = document.getElementById('shortageAnalysis2');
+  if (!el || (!hasStkVal && !hasAdjQty) || !data.length) {
+    if (el)  el.style.display  = 'none';
+    if (el2) el2.style.display = 'none';
     return;
   }
-  document.getElementById('shortageBody').innerHTML = data.map(r =>
-    '<tr>' + shortageHeaders.map((h, i) =>
-      `<td${i === 0 ? ' style="font-weight:600"' : ''}>${r[h] !== undefined ? r[h] : '-'}</td>`
-    ).join('') + '</tr>'
-  ).join('');
-}
 
-function exportShortageCSV() {
-  const data = getFilteredShortage();
-  if (!data.length) return;
-  const rows = data.map(r =>
-    shortageHeaders.map(h => '"' + String(r[h] !== undefined ? r[h] : '').replace(/"/g, '""') + '"').join(',')
-  );
-  const csv = [shortageHeaders.map(h => '"' + h + '"').join(','), ...rows].join('\n');
-  const a   = document.createElement('a');
-  a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = 'kushals_shortage_' + new Date().toISOString().slice(0, 10) + '.csv';
-  a.click();
+  /* Item-wise analysis */
+  if (hasItem) {
+    const rows = _shortageGroup(data, r => r._itemName);
+    const totalStkVal = rows.reduce((s,[,v])=>s+v.stkVal,0);
+    const totalAdjQty = rows.reduce((s,[,v])=>s+v.adjQty,0);
+    el.style.display = '';
+    el.innerHTML = _shortageAnalysisTable('Item-wise Analysis — Stk Value (MRP) &amp; Adj Qty', rows, totalStkVal, totalAdjQty, 'Item Name');
+  } else {
+    el.style.display = 'none';
+  }
+
+  /* Style & Brand side-by-side */
+  if (el2 && (hasStyle || hasBrand || hasOutlet)) {
+    el2.style.display = '';
+    let panels = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">';
+
+    if (hasStyle) {
+      const rows = _shortageGroup(data, r => r._style);
+      const tot  = rows.reduce((s,[,v])=>s+v.stkVal,0);
+      const totQ = rows.reduce((s,[,v])=>s+v.adjQty,0);
+      panels += `<div>${_shortageAnalysisTable('Style-wise Breakdown', rows, tot, totQ, 'Style')}</div>`;
+    }
+    if (hasBrand) {
+      const rows = _shortageGroup(data, r => r._brand);
+      const tot  = rows.reduce((s,[,v])=>s+v.stkVal,0);
+      const totQ = rows.reduce((s,[,v])=>s+v.adjQty,0);
+      panels += `<div>${_shortageAnalysisTable('Brand-wise Breakdown', rows, tot, totQ, 'Brand')}</div>`;
+    }
+    if (hasOutlet) {
+      const rows = _shortageGroup(data, r => r._outlet);
+      const tot  = rows.reduce((s,[,v])=>s+v.stkVal,0);
+      const totQ = rows.reduce((s,[,v])=>s+v.adjQty,0);
+      panels += `<div>${_shortageAnalysisTable('Store-wise Breakdown', rows, tot, totQ, 'Outlet Name')}</div>`;
+    }
+
+    panels += '</div>';
+    el2.innerHTML = panels;
+  } else if (el2) {
+    el2.style.display = 'none';
+  }
 }
