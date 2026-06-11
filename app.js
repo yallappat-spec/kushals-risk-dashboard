@@ -122,7 +122,6 @@ function parseCSV(text) {
   const missing = [
     ['Store', iStore],
     ['Shrinkage / Shrinakge', iShrink],
-    ['OpsScore / Operation Scorecard', iOps],
   ].filter(([, v]) => v === -1).map(([k]) => k);
 
   if (missing.length) {
@@ -132,7 +131,7 @@ function parseCSV(text) {
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
     const c = lines[i].split(',').map(x => x.trim());
-    if (c.length < 3) continue;
+    if (c.length < 2) continue;
 
     const storeName = c[iStore] || 'Store ' + i;
     const region    = (iRegion !== -1 && c[iRegion] && c[iRegion] !== '-')
@@ -142,34 +141,86 @@ function parseCSV(text) {
     const month = iMonth !== -1 ? (c[iMonth] || '-') : '-';
 
     const shRaw = (c[iShrink] || '').replace(/\s/g, '');
-    const opRaw = (c[iOps]    || '').replace(/\s/g, '');
+    /* OpsScore column may not exist in data sheet — sourced from issues sheet instead */
+    const opRaw = iOps !== -1 ? (c[iOps] || '').replace(/\s/g, '') : '';
 
     const fraudRaw = (iFraud !== -1 ? c[iFraud] || '' : '').trim().toLowerCase();
     const fraud = fraudRaw !== '' && fraudRaw !== '-' && fraudRaw !== 'no' && fraudRaw !== 'false' && fraudRaw !== '0';
 
-    /* Rows with missing Ops Score are included as "Pending" */
-    if (!opRaw || opRaw === '-') {
-      rows.push({ store: storeName, region, cm, rm, month, shrinkage: 0, opsScore: null, fraud, pending: true });
-      continue;
-    }
-    const opNum = parseFloat(opRaw.replace('%', ''));
-    if (isNaN(opNum)) continue;
-
     /* Treat missing shrinkage as 0 (no shrinkage risk) */
     const shNum = (!shRaw || shRaw === '-') ? 0 : parseFloat(shRaw.replace('%', ''));
-    if (isNaN(shNum)) continue;
+    if (!shRaw || shRaw !== '-') {
+      if (isNaN(shNum) && shRaw && shRaw !== '-') continue;
+    }
 
     const shrinkage = (!shRaw || shRaw === '-') ? 0 :
       shRaw.includes('%') ? shNum : (Math.abs(shNum) < 0.01 ? shNum * 100 : shNum);
+
+    /* If OpsScore present in data sheet use it; otherwise mark pending (will be filled from issues sheet) */
+    if (!opRaw || opRaw === '-') {
+      rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore: null, fraud, pending: true });
+      continue;
+    }
+    const opNum = parseFloat(opRaw.replace('%', ''));
+    if (isNaN(opNum)) {
+      rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore: null, fraud, pending: true });
+      continue;
+    }
     const opsScore = opRaw.includes('%') ? opNum : (opNum <= 1 ? opNum * 100 : opNum);
 
     rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore, fraud, pending: false });
   }
 
   if (!rows.length) {
-    throw new Error('No valid data rows found. Check Shrinkage and OpsScore columns contain numbers.');
+    throw new Error('No valid data rows found. Check Shrinkage column contains numbers.');
   }
   return rows;
+}
+
+/* ============================================================
+   OPS SCORE ENRICHMENT
+   After issuesData is loaded, derive each store's latest
+   monthly ops score and re-score risk.
+   ============================================================ */
+function parsePeriodToNum(p) {
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const lower = (p || '').toLowerCase().trim();
+  for (let m = 0; m < months.length; m++) {
+    if (lower.startsWith(months[m])) {
+      const y = lower.match(/(\d{4})/);
+      if (y) return parseInt(y[1]) * 100 + m;
+    }
+  }
+  const ym = lower.match(/(\d{4})[- ](\d{1,2})/);
+  if (ym) return parseInt(ym[1]) * 100 + parseInt(ym[2]);
+  return 0;
+}
+
+function enrichStoresWithOpsScores() {
+  if (!issuesData.length) return;
+
+  /* Build map: storeName → { period, score } keeping only the latest period */
+  const latestScore = {};
+  issuesData.forEach(r => {
+    const scoreRaw = (r.score || '').toString().replace('%', '').trim();
+    const scoreNum = parseFloat(scoreRaw);
+    if (isNaN(scoreNum)) return;
+    const score = scoreNum <= 1 ? scoreNum * 100 : scoreNum;
+    const periodNum = parsePeriodToNum(r.period);
+    const existing = latestScore[r.store];
+    if (!existing || periodNum > existing.periodNum) {
+      latestScore[r.store] = { score, period: r.period, periodNum };
+    }
+  });
+
+  activeStores = activeStores.map(s => {
+    const latest = latestScore[s.store];
+    if (!latest) return s; /* no issues data for this store → stays pending */
+    return { ...s, opsScore: latest.score, opsMonth: latest.period, pending: false };
+  });
+
+  activeStores = activeStores.map(calcRisk);
+  applyFilters();
 }
 
 function showStatus(msg, type) {
@@ -335,12 +386,12 @@ function exportCSV() {
    ============================================================ */
 function downloadTemplate() {
   const csv = [
-    'Store,Region,Shrinkage,OpsScore,Fraud',
-    'Store Name 1,Bangalore,-0.082%,85%,No',
-    'Store Name 2,Hyderabad,-0.091%,72%,Yes',
-    'Store Name 3,Chennai,-0.045%,93%,No',
-    'Store Name 4,Mumbai,-0.031%,90%,No',
-    'Store Name 5,Kerala,-0.078%,78%,Yes',
+    'Store,Region,CM Name,RM Name,Shrinkage,Fraud',
+    'BLR - KORAMANGALA,Bangalore,Ambarish,Sathish Kumar,-0.082%,No',
+    'HYD - BANJARA HILLS,Hyderabad,Chandu,Venkat,-0.091%,Yes',
+    'CHN - ANNA NAGAR,Chennai,Ravindar,Raghavendra,-0.045%,No',
+    'MUM - ANDHERI,Mumbai,Azra,Manirathnam,-0.031%,No',
+    'BLR - INDIRANAGAR,Bangalore,Ambarish,Sathish Kumar,-0.078%,Yes',
   ].join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -511,7 +562,7 @@ function renderTable(data) {
       <td style="color:#6b6b68">${s.region}</td>
       <td style="color:#6b6b68">${s.cm || '-'}</td>
       <td style="color:#6b6b68">${s.rm || '-'}</td>
-      <td style="color:#6b6b68">${s.month || '-'}</td>
+      <td style="color:#6b6b68">${s.opsMonth || s.month || '-'}</td>
       <td style="color:${isPending ? '#aaa' : shC};font-weight:600">${isPending ? '-' : sh + '%' + (s.shrinkPts > 0 ? ' &#9650;' : '')}</td>
       <td style="color:${isPending ? '#aaa' : opC};font-weight:600">${isPending ? '-' : s.opsScore + '%'}</td>
       <td style="color:${s.fraud ? '#a32d2d' : '#2a5c14'};font-weight:600">${s.fraud ? 'Yes' : 'No'}</td>
@@ -773,6 +824,7 @@ async function loadIssuesSheet() {
     }));
     rebuildIssuesFilters();
     applyIssuesFilters();
+    enrichStoresWithOpsScores();
     showIssuesStatus('', '');
   } catch (err) {
     showIssuesStatus('&#10007; Could not load issues sheet: ' + err.message, 'err');
