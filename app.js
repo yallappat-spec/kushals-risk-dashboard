@@ -196,31 +196,45 @@ function parsePeriodToNum(p) {
   return 0;
 }
 
-function enrichStoresWithOpsScores() {
+function enrichStoresWithOpsScores(selectedPeriod) {
   if (!issuesData.length) return;
+  selectedPeriod = selectedPeriod || 'latest';
 
-  /* Build map: storeName → { period, score } keeping only the latest period */
-  const latestScore = {};
+  /* Build map: storeName → best matching { score, period } */
+  const scoreMap = {};
   issuesData.forEach(r => {
     const scoreRaw = (r.score || '').toString().replace('%', '').trim();
     const scoreNum = parseFloat(scoreRaw);
     if (isNaN(scoreNum)) return;
     const score = scoreNum <= 1 ? scoreNum * 100 : scoreNum;
     const periodNum = parsePeriodToNum(r.period);
-    const existing = latestScore[r.store];
-    if (!existing || periodNum > existing.periodNum) {
-      latestScore[r.store] = { score, period: r.period, periodNum };
+
+    if (selectedPeriod === 'latest') {
+      const existing = scoreMap[r.store];
+      if (!existing || periodNum > existing.periodNum) {
+        scoreMap[r.store] = { score, period: r.period, periodNum };
+      }
+    } else {
+      /* exact period match */
+      if (r.period === selectedPeriod) {
+        scoreMap[r.store] = { score, period: r.period, periodNum };
+      }
     }
   });
 
   activeStores = activeStores.map(s => {
-    const latest = latestScore[s.store];
-    if (!latest) return s; /* no issues data for this store → stays pending */
-    return { ...s, opsScore: latest.score, opsMonth: latest.period, pending: false };
+    const match = scoreMap[s.store];
+    if (!match) return { ...s, opsScore: null, opsMonth: null, pending: true };
+    return { ...s, opsScore: match.score, opsMonth: match.period, pending: false };
   });
 
   activeStores = activeStores.map(calcRisk);
   applyFilters();
+}
+
+function applyOpsPeriodFilter() {
+  const sel = document.getElementById('opsPeriodFilter');
+  enrichStoresWithOpsScores(sel ? sel.value : 'latest');
 }
 
 function showStatus(msg, type) {
@@ -425,7 +439,17 @@ function rebuildFilters() {
   rebuild('regionFilter', [...new Set(activeStores.map(s => s.region))].sort(), 'All');
   rebuild('cmFilter',     [...new Set(activeStores.map(s => s.cm).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('rmFilter',     [...new Set(activeStores.map(s => s.rm).filter(v => v && v !== '-'))].sort(), 'All');
-  rebuild('monthFilter',  [...new Set(activeStores.map(s => s.month).filter(v => v && v !== '-'))], 'All');
+}
+
+function rebuildOpsPeriodFilter() {
+  const sel = document.getElementById('opsPeriodFilter');
+  if (!sel) return;
+  const cur = sel.value;
+  const periods = [...new Set(issuesData.map(r => r.period).filter(v => v && v !== '-'))]
+    .sort((a, b) => parsePeriodToNum(b) - parsePeriodToNum(a)); /* newest first */
+  sel.innerHTML = '<option value="latest">Latest</option>' +
+    periods.map(v => `<option value="${v}">${v}</option>`).join('');
+  if (periods.includes(cur)) sel.value = cur;
 }
 
 /* Keep old name as alias so existing calls still work */
@@ -435,19 +459,17 @@ function rebuildRegionFilter() { rebuildFilters(); }
    FILTERS & SORTING
    ============================================================ */
 function getFiltered() {
-  const reg   = document.getElementById('regionFilter').value;
-  const cm    = document.getElementById('cmFilter').value;
-  const rm    = document.getElementById('rmFilter').value;
-  const month = document.getElementById('monthFilter').value;
-  const risk  = document.getElementById('riskFilter').value;
-  const sort  = document.getElementById('sortFilter').value;
+  const reg  = document.getElementById('regionFilter').value;
+  const cm   = document.getElementById('cmFilter').value;
+  const rm   = document.getElementById('rmFilter').value;
+  const risk = document.getElementById('riskFilter').value;
+  const sort = document.getElementById('sortFilter').value;
 
   let data = activeStores.filter(s =>
-    (reg   === 'all' || s.region === reg) &&
-    (cm    === 'all' || s.cm    === cm) &&
-    (rm    === 'all' || s.rm    === rm) &&
-    (month === 'all' || s.month === month) &&
-    (risk  === 'all' || s.level === risk) &&
+    (reg  === 'all' || s.region === reg) &&
+    (cm   === 'all' || s.cm    === cm) &&
+    (rm   === 'all' || s.rm    === rm) &&
+    (risk === 'all' || s.level === risk) &&
     (cardFilter === null          ||
      (cardFilter === 'high'      && s.level === 'High') ||
      (cardFilter === 'medium'    && s.level === 'Medium') ||
@@ -824,7 +846,8 @@ async function loadIssuesSheet() {
     }));
     rebuildIssuesFilters();
     applyIssuesFilters();
-    enrichStoresWithOpsScores();
+    rebuildOpsPeriodFilter();
+    enrichStoresWithOpsScores(document.getElementById('opsPeriodFilter')?.value || 'latest');
     showIssuesStatus('', '');
   } catch (err) {
     showIssuesStatus('&#10007; Could not load issues sheet: ' + err.message, 'err');
