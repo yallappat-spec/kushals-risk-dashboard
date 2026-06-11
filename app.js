@@ -188,7 +188,8 @@ function parsePeriodToNum(p) {
   for (let m = 0; m < months.length; m++) {
     if (lower.startsWith(months[m])) {
       const y = lower.match(/(\d{4})/);
-      if (y) return parseInt(y[1]) * 100 + m;
+      /* With year: "May 2025" → 202504; without year: "May" → 4 */
+      return y ? parseInt(y[1]) * 100 + m : m;
     }
   }
   const ym = lower.match(/(\d{4})[- ](\d{1,2})/);
