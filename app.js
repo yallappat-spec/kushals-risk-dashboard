@@ -1521,8 +1521,8 @@ function renderShortageAnalysis(data) {
 
 /* ============================================================
    AUDIT TYPES TAB — load from "Audit Types" sheet
-   Renders every column dynamically so it works regardless of
-   the sheet's structure. Includes a free-text search + export.
+   Filters: Date / Month / Quarter / Audit Type
+   Table columns: Outlet Name, Checklist Point, Remarks
    ============================================================ */
 function toAuditCSVUrl(mainUrl) {
   const idMatch = mainUrl.trim().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -1550,9 +1550,8 @@ async function loadAuditSheet() {
     const res = await fetch(csvUrl);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    const parsed = parseAuditCSV(text);
-    auditHeaders = parsed.headers;
-    auditData    = parsed.rows;
+    auditData = parseAuditCSV(text);
+    rebuildAuditFilters();
     applyAuditFilters();
     showAuditStatus('', '');
   } catch (err) {
@@ -1560,24 +1559,65 @@ async function loadAuditSheet() {
   }
 }
 
-/* Generic parse: keeps header labels as-is and each row as an array of cells */
 function parseAuditCSV(text) {
   const allRows = parseFullCSV(text);
-  if (allRows.length < 1) return { headers: [], rows: [] };
-  const headers = allRows[0].map(h => (h || '').trim());
+  if (allRows.length < 2) return [];
+
+  const hdrs = allRows[0].map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  const iDate      = col('date');
+  const iMonth     = col('month');
+  const iQuarter   = col('quarter', 'qtr');
+  const iType      = col('audittype', 'type');
+  const iOutlet    = col('outletname', 'outlet', 'store', 'storename');
+  const iRemarks   = col('remarks', 'remark', 'observation', 'observations');
+
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
     if (!c.some(v => v && v.trim())) continue;   /* skip blank rows */
-    rows.push(headers.map((_, j) => (c[j] || '').trim()));
+    rows.push({
+      date:      iDate      !== -1 ? c[iDate]      || '-' : '-',
+      month:     iMonth     !== -1 ? c[iMonth]     || '-' : '-',
+      quarter:   iQuarter   !== -1 ? c[iQuarter]   || '-' : '-',
+      type:      iType      !== -1 ? c[iType]      || '-' : '-',
+      outlet:    iOutlet    !== -1 ? c[iOutlet]    || '-' : '-',
+      remarks:   iRemarks   !== -1 ? c[iRemarks]   || '-' : '-',
+    });
   }
-  return { headers, rows };
+  return rows;
+}
+
+function rebuildAuditFilters() {
+  function rebuild(id, values) {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">All</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  rebuild('auditDateFilter',    [...new Set(auditData.map(r => r.date).filter(v => v !== '-'))]);
+  rebuild('auditMonthFilter',   [...new Set(auditData.map(r => r.month).filter(v => v !== '-'))]);
+  rebuild('auditQuarterFilter', [...new Set(auditData.map(r => r.quarter).filter(v => v !== '-'))]);
+  rebuild('auditTypeFilter',    [...new Set(auditData.map(r => r.type).filter(v => v !== '-'))].sort());
 }
 
 function getFilteredAudit() {
-  const q = (document.getElementById('auditSearch').value || '').trim().toLowerCase();
-  if (!q) return auditData;
-  return auditData.filter(row => row.some(cell => cell.toLowerCase().includes(q)));
+  const date    = document.getElementById('auditDateFilter').value;
+  const month   = document.getElementById('auditMonthFilter').value;
+  const quarter = document.getElementById('auditQuarterFilter').value;
+  const type    = document.getElementById('auditTypeFilter').value;
+  return auditData.filter(r =>
+    (date    === 'all' || r.date    === date)    &&
+    (month   === 'all' || r.month   === month)   &&
+    (quarter === 'all' || r.quarter === quarter) &&
+    (type    === 'all' || r.type    === type)
+  );
 }
 
 function applyAuditFilters() {
@@ -1585,36 +1625,28 @@ function applyAuditFilters() {
 }
 
 function renderAuditTable(data) {
-  const head = document.getElementById('auditHead');
-  const body = document.getElementById('auditBody');
   document.getElementById('auditCount').textContent = data.length + ' rows';
-
-  if (!auditHeaders.length) {
-    head.innerHTML = '';
-    body.innerHTML = '<tr><td><div class="empty">No Audit Types data found in the sheet.</div></td></tr>';
-    return;
-  }
-
-  head.innerHTML = auditHeaders.map(h => `<th>${h}</th>`).join('');
-
   if (!data.length) {
-    body.innerHTML = `<tr><td colspan="${auditHeaders.length}"><div class="empty">No rows match your search.</div></td></tr>`;
+    document.getElementById('auditBody').innerHTML =
+      '<tr><td colspan="3"><div class="empty">No data matches the selected filters.</div></td></tr>';
     return;
   }
-
-  body.innerHTML = data.map(row =>
-    '<tr>' + auditHeaders.map((_, j) =>
-      `<td${j === 0 ? ' style="font-weight:600"' : ''}>${row[j] || ''}</td>`
-    ).join('') + '</tr>'
-  ).join('');
+  document.getElementById('auditBody').innerHTML = data.map(r => `<tr>
+      <td style="font-weight:600;white-space:nowrap">${r.outlet}</td>
+      <td style="white-space:nowrap">${r.type}</td>
+      <td class="issues-obs">${r.remarks}</td>
+    </tr>`).join('');
 }
 
 function exportAuditCSV() {
   const data = getFilteredAudit();
   if (!data.length) return;
-  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const csv = [auditHeaders.map(esc).join(','),
-               ...data.map(row => row.map(esc).join(','))].join('\n');
+  const headers = ['Outlet Name','Audit Type','Remarks'];
+  const rows = data.map(r =>
+    [r.outlet, r.type, r.remarks]
+      .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
+  );
+  const csv = [headers.join(','), ...rows].join('\n');
   const a   = document.createElement('a');
   a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'kushals_audit_types_' + new Date().toISOString().slice(0, 10) + '.csv';
