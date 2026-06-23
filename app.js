@@ -1573,17 +1573,29 @@ async function loadAuditSheet() {
 }
 
 function parseAuditCSV(text) {
-  const allRows = parseFullCSV(text);
+  let allRows = parseFullCSV(text);
   if (allRows.length < 2) return [];
 
   const norm = r => r.map(h => (h || '').toLowerCase().replace(/[\s%.]/g, ''));
+  const KNOWN = ['date','month','quarter','audittype','type','outletname',
+                 'outlet','store','storename','remarks','remark',
+                 'observation','observations','checklistpoint','checklist'];
+
+  /* Detect a transposed layout: field names run DOWN the first column
+     (one field per row) instead of across the header row. If so, flip the
+     matrix so rows = records and columns = fields. */
+  const firstColHits = allRows.filter(r => KNOWN.includes((r[0] || '')
+    .toLowerCase().replace(/[\s%.]/g, ''))).length;
+  if (firstColHits >= 3) {
+    const maxCols = allRows.reduce((m, r) => Math.max(m, r.length), 0);
+    const flipped = [];
+    for (let c = 0; c < maxCols; c++) flipped.push(allRows.map(r => r[c] || ''));
+    allRows = flipped;
+  }
 
   /* The real header row isn't always row 0 — sheets often have a title or
      blank row on top. Pick the row (within the first 15) that matches the
      most known column names. */
-  const KNOWN = ['date','month','quarter','audittype','type','outletname',
-                 'outlet','store','storename','remarks','remark',
-                 'observation','observations','checklistpoint','checklist'];
   let headerIdx = 0, bestScore = -1;
   for (let i = 0; i < Math.min(allRows.length, 15); i++) {
     const score = norm(allRows[i]).filter(h => KNOWN.includes(h)).length;
