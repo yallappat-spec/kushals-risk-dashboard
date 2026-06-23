@@ -1565,9 +1565,11 @@ async function loadAuditSheet() {
     if (blank) {
       const grid = parseFullCSV(text);
       const dims = grid.length + ' rows × ' + (grid[0] ? grid[0].length : 0) + ' cols';
-      const preview = text.slice(0, 400).replace(/\r/g, '').replace(/\n/g, ' ⏎ ');
-      showAuditStatus('&#9888; [audit-loader v3] Could not match columns. Raw CSV: ' +
-        dims + '. Preview: ' + preview, 'err');
+      const fmt = r => r ? '[' + r.map(c => (c || '').slice(0, 22)).join('] [') + ']' : '(none)';
+      showAuditStatus('&#9888; [audit-loader v4] Could not match columns. dims: ' + dims +
+        ' &nbsp;||&nbsp; Row0: ' + fmt(grid[0]) +
+        ' &nbsp;||&nbsp; Row1: ' + fmt(grid[1]) +
+        ' &nbsp;||&nbsp; Row2: ' + fmt(grid[2]), 'err');
     } else {
       showAuditStatus('', '');
     }
