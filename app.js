@@ -1559,11 +1559,15 @@ async function loadAuditSheet() {
     }));
     rebuildAuditFilters();
     applyAuditFilters();
-    /* If the columns couldn't be matched, surface the actual header names */
-    if (auditData.length && auditData.every(r => r.outlet === '-' && r.type === '-' && r.remarks === '-')) {
-      showAuditStatus('&#9888; Loaded ' + auditData.length +
-        ' rows but could not match the expected columns. Detected headers: ' +
-        auditDetectedHeaders.join(' | '), 'err');
+    /* If the columns couldn't be matched, surface raw CSV shape for diagnosis */
+    const blank = !auditData.length ||
+      auditData.every(r => r.outlet === '-' && r.type === '-' && r.remarks === '-');
+    if (blank) {
+      const grid = parseFullCSV(text);
+      const dims = grid.length + ' rows × ' + (grid[0] ? grid[0].length : 0) + ' cols';
+      const preview = text.slice(0, 400).replace(/\r/g, '').replace(/\n/g, ' ⏎ ');
+      showAuditStatus('&#9888; [audit-loader v3] Could not match columns. Raw CSV: ' +
+        dims + '. Preview: ' + preview, 'err');
     } else {
       showAuditStatus('', '');
     }
