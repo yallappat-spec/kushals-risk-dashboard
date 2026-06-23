@@ -11,6 +11,7 @@ let shrinkageData = [];
 let shortageData  = [];
 let auditData     = [];
 let auditHeaders  = [];
+let auditDetectedHeaders = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -1550,10 +1551,22 @@ async function loadAuditSheet() {
     const res = await fetch(csvUrl);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    auditData = parseAuditCSV(text);
+    const storeMap = {};
+    activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
+    auditData = parseAuditCSV(text).map(r => ({
+      ...r,
+      rm: storeMap[r.outlet]?.rm || '-',
+    }));
     rebuildAuditFilters();
     applyAuditFilters();
-    showAuditStatus('', '');
+    /* If the columns couldn't be matched, surface the actual header names */
+    if (auditData.length && auditData.every(r => r.outlet === '-' && r.type === '-' && r.remarks === '-')) {
+      showAuditStatus('&#9888; Loaded ' + auditData.length +
+        ' rows but could not match the expected columns. Detected headers: ' +
+        auditDetectedHeaders.join(' | '), 'err');
+    } else {
+      showAuditStatus('', '');
+    }
   } catch (err) {
     showAuditStatus('&#10007; Could not load Audit Types sheet: ' + err.message, 'err');
   }
@@ -1563,7 +1576,22 @@ function parseAuditCSV(text) {
   const allRows = parseFullCSV(text);
   if (allRows.length < 2) return [];
 
-  const hdrs = allRows[0].map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
+  const norm = r => r.map(h => (h || '').toLowerCase().replace(/[\s%.]/g, ''));
+
+  /* The real header row isn't always row 0 — sheets often have a title or
+     blank row on top. Pick the row (within the first 15) that matches the
+     most known column names. */
+  const KNOWN = ['date','month','quarter','audittype','type','outletname',
+                 'outlet','store','storename','remarks','remark',
+                 'observation','observations','checklistpoint','checklist'];
+  let headerIdx = 0, bestScore = -1;
+  for (let i = 0; i < Math.min(allRows.length, 15); i++) {
+    const score = norm(allRows[i]).filter(h => KNOWN.includes(h)).length;
+    if (score > bestScore) { bestScore = score; headerIdx = i; }
+  }
+
+  const hdrs = norm(allRows[headerIdx]);
+  auditDetectedHeaders = allRows[headerIdx].map(h => (h || '').trim());
 
   function col(...names) {
     for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
@@ -1578,7 +1606,7 @@ function parseAuditCSV(text) {
   const iRemarks   = col('remarks', 'remark', 'observation', 'observations');
 
   const rows = [];
-  for (let i = 1; i < allRows.length; i++) {
+  for (let i = headerIdx + 1; i < allRows.length; i++) {
     const c = allRows[i];
     if (!c.some(v => v && v.trim())) continue;   /* skip blank rows */
     rows.push({
@@ -1605,6 +1633,7 @@ function rebuildAuditFilters() {
   rebuild('auditMonthFilter',   [...new Set(auditData.map(r => r.month).filter(v => v !== '-'))]);
   rebuild('auditQuarterFilter', [...new Set(auditData.map(r => r.quarter).filter(v => v !== '-'))]);
   rebuild('auditTypeFilter',    [...new Set(auditData.map(r => r.type).filter(v => v !== '-'))].sort());
+  rebuild('auditRmFilter',      [...new Set(auditData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
 }
 
 function getFilteredAudit() {
@@ -1612,11 +1641,13 @@ function getFilteredAudit() {
   const month   = document.getElementById('auditMonthFilter').value;
   const quarter = document.getElementById('auditQuarterFilter').value;
   const type    = document.getElementById('auditTypeFilter').value;
+  const rm      = document.getElementById('auditRmFilter').value;
   return auditData.filter(r =>
     (date    === 'all' || r.date    === date)    &&
     (month   === 'all' || r.month   === month)   &&
     (quarter === 'all' || r.quarter === quarter) &&
-    (type    === 'all' || r.type    === type)
+    (type    === 'all' || r.type    === type)    &&
+    (rm      === 'all' || r.rm      === rm)
   );
 }
 
