@@ -1550,7 +1550,12 @@ async function loadAuditSheet() {
     const res = await fetch(csvUrl);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    auditData = parseAuditCSV(text);
+    const storeMap = {};
+    activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
+    auditData = parseAuditCSV(text).map(r => ({
+      ...r,
+      rm: storeMap[r.outlet]?.rm || '-',
+    }));
     rebuildAuditFilters();
     applyAuditFilters();
     showAuditStatus('', '');
@@ -1605,6 +1610,7 @@ function rebuildAuditFilters() {
   rebuild('auditMonthFilter',   [...new Set(auditData.map(r => r.month).filter(v => v !== '-'))]);
   rebuild('auditQuarterFilter', [...new Set(auditData.map(r => r.quarter).filter(v => v !== '-'))]);
   rebuild('auditTypeFilter',    [...new Set(auditData.map(r => r.type).filter(v => v !== '-'))].sort());
+  rebuild('auditRmFilter',      [...new Set(auditData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
 }
 
 function getFilteredAudit() {
@@ -1612,11 +1618,13 @@ function getFilteredAudit() {
   const month   = document.getElementById('auditMonthFilter').value;
   const quarter = document.getElementById('auditQuarterFilter').value;
   const type    = document.getElementById('auditTypeFilter').value;
+  const rm      = document.getElementById('auditRmFilter').value;
   return auditData.filter(r =>
     (date    === 'all' || r.date    === date)    &&
     (month   === 'all' || r.month   === month)   &&
     (quarter === 'all' || r.quarter === quarter) &&
-    (type    === 'all' || r.type    === type)
+    (type    === 'all' || r.type    === type)    &&
+    (rm      === 'all' || r.rm      === rm)
   );
 }
 
