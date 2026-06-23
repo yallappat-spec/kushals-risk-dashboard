@@ -9,6 +9,8 @@ let activeStores  = [];
 let issuesData    = [];
 let shrinkageData = [];
 let shortageData  = [];
+let auditData     = [];
+let auditHeaders  = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -266,6 +268,11 @@ function clearData() {
   renderShrinkageTable([]);
   document.getElementById('shrinkageCount').textContent = '';
   document.getElementById('shrinkageStatus').className = 'upload-status';
+  auditData = [];
+  auditHeaders = [];
+  renderAuditTable([]);
+  document.getElementById('auditCount').textContent = '';
+  document.getElementById('auditStatus').className = 'upload-status';
 }
 
 /* ============================================================
@@ -359,6 +366,7 @@ async function loadFromGoogleSheet() {
     loadIssuesSheet();
     loadShrinkageSheet();
     loadShortageSheet();
+    loadAuditSheet();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
   } finally {
@@ -692,6 +700,7 @@ function startAutoRefresh() {
       loadIssuesSheet();
       loadShrinkageSheet();
       loadShortageSheet();
+      loadAuditSheet();
     } catch (_) { /* silently skip failed auto-refresh */ }
   }, AUTO_REFRESH_MS);
   updateRefreshBadge(true);
@@ -735,13 +744,16 @@ function switchPageTab(tab) {
   document.getElementById('pageIssues').style.display    = tab === 'issues'    ? '' : 'none';
   document.getElementById('pageShrinkage').style.display = tab === 'shrinkage' ? '' : 'none';
   document.getElementById('pageShortage').style.display  = tab === 'shortage'  ? '' : 'none';
+  document.getElementById('pageAudit').style.display     = tab === 'audit'     ? '' : 'none';
   document.getElementById('ptab-risk').classList.toggle('active',      tab === 'risk');
   document.getElementById('ptab-issues').classList.toggle('active',    tab === 'issues');
   document.getElementById('ptab-shrinkage').classList.toggle('active', tab === 'shrinkage');
   document.getElementById('ptab-shortage').classList.toggle('active',  tab === 'shortage');
+  document.getElementById('ptab-audit').classList.toggle('active',     tab === 'audit');
   if (tab === 'issues'    && issuesData.length    === 0) loadIssuesSheet();
   if (tab === 'shrinkage' && shrinkageData.length === 0) loadShrinkageSheet();
   if (tab === 'shortage'  && shortageData.length  === 0) loadShortageSheet();
+  if (tab === 'audit'     && auditData.length     === 0) loadAuditSheet();
 }
 
 function toggleStoreIssues(storeName, el) {
@@ -1505,4 +1517,106 @@ function renderShortageAnalysis(data) {
     panels += '</div>';
     el2.innerHTML = panels;
   }
+}
+
+/* ============================================================
+   AUDIT TYPES TAB — load from "Audit Types" sheet
+   Renders every column dynamically so it works regardless of
+   the sheet's structure. Includes a free-text search + export.
+   ============================================================ */
+function toAuditCSVUrl(mainUrl) {
+  const idMatch = mainUrl.trim().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!idMatch) return null;
+  return 'https://docs.google.com/spreadsheets/d/' + idMatch[1] +
+    '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Audit Types');
+}
+
+function showAuditStatus(msg, type) {
+  const el = document.getElementById('auditStatus');
+  el.innerHTML = msg;
+  el.className = 'upload-status' + (type ? ' ' + type : '');
+}
+
+async function loadAuditSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) {
+    showAuditStatus('Audit Types data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
+    return;
+  }
+  const csvUrl = toAuditCSVUrl(raw);
+  if (!csvUrl) return;
+  showAuditStatus('Loading audit types…', '');
+  try {
+    const res = await fetch(csvUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const parsed = parseAuditCSV(text);
+    auditHeaders = parsed.headers;
+    auditData    = parsed.rows;
+    applyAuditFilters();
+    showAuditStatus('', '');
+  } catch (err) {
+    showAuditStatus('&#10007; Could not load Audit Types sheet: ' + err.message, 'err');
+  }
+}
+
+/* Generic parse: keeps header labels as-is and each row as an array of cells */
+function parseAuditCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 1) return { headers: [], rows: [] };
+  const headers = allRows[0].map(h => (h || '').trim());
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    if (!c.some(v => v && v.trim())) continue;   /* skip blank rows */
+    rows.push(headers.map((_, j) => (c[j] || '').trim()));
+  }
+  return { headers, rows };
+}
+
+function getFilteredAudit() {
+  const q = (document.getElementById('auditSearch').value || '').trim().toLowerCase();
+  if (!q) return auditData;
+  return auditData.filter(row => row.some(cell => cell.toLowerCase().includes(q)));
+}
+
+function applyAuditFilters() {
+  renderAuditTable(getFilteredAudit());
+}
+
+function renderAuditTable(data) {
+  const head = document.getElementById('auditHead');
+  const body = document.getElementById('auditBody');
+  document.getElementById('auditCount').textContent = data.length + ' rows';
+
+  if (!auditHeaders.length) {
+    head.innerHTML = '';
+    body.innerHTML = '<tr><td><div class="empty">No Audit Types data found in the sheet.</div></td></tr>';
+    return;
+  }
+
+  head.innerHTML = auditHeaders.map(h => `<th>${h}</th>`).join('');
+
+  if (!data.length) {
+    body.innerHTML = `<tr><td colspan="${auditHeaders.length}"><div class="empty">No rows match your search.</div></td></tr>`;
+    return;
+  }
+
+  body.innerHTML = data.map(row =>
+    '<tr>' + auditHeaders.map((_, j) =>
+      `<td${j === 0 ? ' style="font-weight:600"' : ''}>${row[j] || ''}</td>`
+    ).join('') + '</tr>'
+  ).join('');
+}
+
+function exportAuditCSV() {
+  const data = getFilteredAudit();
+  if (!data.length) return;
+  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = [auditHeaders.map(esc).join(','),
+               ...data.map(row => row.map(esc).join(','))].join('\n');
+  const a   = document.createElement('a');
+  a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_audit_types_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
 }

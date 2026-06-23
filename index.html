@@ -25,6 +25,7 @@
     <button class="ptab"        id="ptab-issues"    onclick="switchPageTab('issues')">&#128203; Store Issues</button>
     <button class="ptab"        id="ptab-shrinkage" onclick="switchPageTab('shrinkage')">&#128200; Shrinkage %</button>
     <button class="ptab"        id="ptab-shortage"  onclick="switchPageTab('shortage')">&#128230; Shortage Items</button>
+    <button class="ptab"        id="ptab-audit"     onclick="switchPageTab('audit')">&#128221; Audit Types</button>
   </div>
 
   <!-- ===== DATA SOURCE BAR ===== -->
@@ -315,6 +316,36 @@
     <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Shortage Items</div>
 
   </div><!-- end pageShortage -->
+
+  <!-- ===== AUDIT TYPES TAB ===== -->
+  <div id="pageAudit" style="display:none">
+
+    <div id="auditStatus" class="upload-status" style="margin-bottom:12px"></div>
+
+    <div class="filter-row">
+      <label>Search:</label>
+      <input type="text" id="auditSearch" class="sheet-url-input" style="max-width:280px"
+             placeholder="Search audit types…" oninput="applyAuditFilters()" />
+    </div>
+
+    <div class="sec-hdr">
+      <div class="sec-title">Audit Types</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="auditCount"></div>
+        <button class="btn-export" onclick="exportAuditCSV()">&#8595; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr id="auditHead"></tr></thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Audit Types</div>
+
+  </div><!-- end pageAudit -->
 
 </div>
 
