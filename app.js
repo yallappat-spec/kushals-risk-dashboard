@@ -10,8 +10,6 @@ let issuesData    = [];
 let shrinkageData = [];
 let shortageData  = [];
 let auditData     = [];
-let auditHeaders  = [];
-let auditDetectedHeaders = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -270,7 +268,6 @@ function clearData() {
   document.getElementById('shrinkageCount').textContent = '';
   document.getElementById('shrinkageStatus').className = 'upload-status';
   auditData = [];
-  auditHeaders = [];
   renderAuditTable([]);
   document.getElementById('auditCount').textContent = '';
   document.getElementById('auditStatus').className = 'upload-status';
@@ -1522,14 +1519,19 @@ function renderShortageAnalysis(data) {
 
 /* ============================================================
    AUDIT TYPES TAB — load from "Audit Types" sheet
-   Filters: Date / Month / Quarter / Audit Type
-   Table columns: Outlet Name, Checklist Point, Remarks
+   Filters: Date / Month / Quarter / Audit Type / RM Name
+   Table columns: Outlet Name, Audit Type, Remarks
+
+   Uses the gviz JSON endpoint (not CSV): the Remarks/Checklist cells
+   contain line breaks and dirty characters that corrupt CSV parsing
+   (header + first records collapse into one row). JSON is structured and
+   immune to those in-cell line breaks / quotes / encoding issues.
    ============================================================ */
-function toAuditCSVUrl(mainUrl) {
+function toAuditJSONUrl(mainUrl) {
   const idMatch = mainUrl.trim().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
   if (!idMatch) return null;
   return 'https://docs.google.com/spreadsheets/d/' + idMatch[1] +
-    '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Audit Types');
+    '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent('Audit Types');
 }
 
 function showAuditStatus(msg, type) {
@@ -1538,102 +1540,89 @@ function showAuditStatus(msg, type) {
   el.className = 'upload-status' + (type ? ' ' + type : '');
 }
 
+/* Clean up common UTF-8-read-as-Windows-1252 mojibake found in the sheet */
+function fixMojibake(s) {
+  return s
+    .replace(/â€”/g, '—')  /* â€" → em dash */
+    .replace(/â€“/g, '–')  /* â€" → en dash */
+    .replace(/â€™/g, '’')  /* â€™ → ’        */
+    .replace(/â€˜/g, '‘')  /* â€˜ → ‘        */
+    .replace(/â€œ/g, '“')  /* â€œ → “        */
+    .replace(/Â /g, ' ');            /* Â  → space     */
+}
+
 async function loadAuditSheet() {
   const raw = document.getElementById('sheetUrl').value.trim();
   if (!raw) {
     showAuditStatus('Audit Types data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
     return;
   }
-  const csvUrl = toAuditCSVUrl(raw);
-  if (!csvUrl) return;
+  const url = toAuditJSONUrl(raw);
+  if (!url) return;
   showAuditStatus('Loading audit types…', '');
   try {
-    const res = await fetch(csvUrl);
+    const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
+    /* gviz wraps the JSON in google.visualization.Query.setResponse(...) */
+    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
     const storeMap = {};
     activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
-    auditData = parseAuditCSV(text).map(r => ({
+    auditData = parseAuditTable(json.table).map(r => ({
       ...r,
       rm: storeMap[r.outlet]?.rm || '-',
     }));
     rebuildAuditFilters();
     applyAuditFilters();
-    /* If the columns couldn't be matched, surface raw CSV shape for diagnosis */
-    const blank = !auditData.length ||
-      auditData.every(r => r.outlet === '-' && r.type === '-' && r.remarks === '-');
-    if (blank) {
-      const grid = parseFullCSV(text);
-      const dims = grid.length + ' rows × ' + (grid[0] ? grid[0].length : 0) + ' cols';
-      const fmt = r => r ? '[' + r.map(c => (c || '').slice(0, 22)).join('] [') + ']' : '(none)';
-      showAuditStatus('&#9888; [audit-loader v4] Could not match columns. dims: ' + dims +
-        ' &nbsp;||&nbsp; Row0: ' + fmt(grid[0]) +
-        ' &nbsp;||&nbsp; Row1: ' + fmt(grid[1]) +
-        ' &nbsp;||&nbsp; Row2: ' + fmt(grid[2]), 'err');
-    } else {
-      showAuditStatus('', '');
-    }
+    showAuditStatus('', '');
   } catch (err) {
     showAuditStatus('&#10007; Could not load Audit Types sheet: ' + err.message, 'err');
   }
 }
 
-function parseAuditCSV(text) {
-  let allRows = parseFullCSV(text);
-  if (allRows.length < 2) return [];
+function parseAuditTable(table) {
+  if (!table || !table.cols) return [];
 
-  const norm = r => r.map(h => (h || '').toLowerCase().replace(/[\s%.]/g, ''));
-  const KNOWN = ['date','month','quarter','audittype','type','outletname',
-                 'outlet','store','storename','remarks','remark',
-                 'observation','observations','checklistpoint','checklist'];
+  const norm = s => (s || '').toLowerCase().replace(/[\s%.]/g, '');
+  const hdrs = table.cols.map(c => norm(c.label));
 
-  /* Detect a transposed layout: field names run DOWN the first column
-     (one field per row) instead of across the header row. If so, flip the
-     matrix so rows = records and columns = fields. */
-  const firstColHits = allRows.filter(r => KNOWN.includes((r[0] || '')
-    .toLowerCase().replace(/[\s%.]/g, ''))).length;
-  if (firstColHits >= 3) {
-    const maxCols = allRows.reduce((m, r) => Math.max(m, r.length), 0);
-    const flipped = [];
-    for (let c = 0; c < maxCols; c++) flipped.push(allRows.map(r => r[c] || ''));
-    allRows = flipped;
+  /* Match by header label (exact, then contains); fall back to the known
+     fixed column order if a label can't be matched. */
+  function col(names, fallback) {
+    for (const n of names) {
+      let i = hdrs.indexOf(n);
+      if (i !== -1) return i;
+      i = hdrs.findIndex(h => h && (h.startsWith(n) || h.includes(n)));
+      if (i !== -1) return i;
+    }
+    return fallback;
   }
+  const iOutlet  = col(['outletname', 'outlet', 'store', 'storename'], 0);
+  const iDate    = col(['date'], 1);
+  const iMonth   = col(['month'], 2);
+  const iQuarter = col(['quarter', 'qtr'], 3);
+  const iType    = col(['audittype', 'type'], 4);
+  const iRemarks = col(['remarks', 'remark', 'observation', 'observations'], 6);
 
-  /* The real header row isn't always row 0 — sheets often have a title or
-     blank row on top. Pick the row (within the first 15) that matches the
-     most known column names. */
-  let headerIdx = 0, bestScore = -1;
-  for (let i = 0; i < Math.min(allRows.length, 15); i++) {
-    const score = norm(allRows[i]).filter(h => KNOWN.includes(h)).length;
-    if (score > bestScore) { bestScore = score; headerIdx = i; }
-  }
-
-  const hdrs = norm(allRows[headerIdx]);
-  auditDetectedHeaders = allRows[headerIdx].map(h => (h || '').trim());
-
-  function col(...names) {
-    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
-    return -1;
-  }
-
-  const iDate      = col('date');
-  const iMonth     = col('month');
-  const iQuarter   = col('quarter', 'qtr');
-  const iType      = col('audittype', 'type');
-  const iOutlet    = col('outletname', 'outlet', 'store', 'storename');
-  const iRemarks   = col('remarks', 'remark', 'observation', 'observations');
+  const cell = (r, i) => {
+    if (i < 0 || !r.c || !r.c[i]) return '-';
+    const c = r.c[i];
+    const v = (c.f != null ? c.f : c.v);
+    if (v == null) return '-';
+    return fixMojibake(String(v)).trim() || '-';
+  };
 
   const rows = [];
-  for (let i = headerIdx + 1; i < allRows.length; i++) {
-    const c = allRows[i];
-    if (!c.some(v => v && v.trim())) continue;   /* skip blank rows */
+  for (const r of (table.rows || [])) {
+    const outlet = cell(r, iOutlet);
+    const type   = cell(r, iType);
+    const remarks = cell(r, iRemarks);
+    if (outlet === '-' && type === '-' && remarks === '-') continue;  /* skip blanks */
     rows.push({
-      date:      iDate      !== -1 ? c[iDate]      || '-' : '-',
-      month:     iMonth     !== -1 ? c[iMonth]     || '-' : '-',
-      quarter:   iQuarter   !== -1 ? c[iQuarter]   || '-' : '-',
-      type:      iType      !== -1 ? c[iType]      || '-' : '-',
-      outlet:    iOutlet    !== -1 ? c[iOutlet]    || '-' : '-',
-      remarks:   iRemarks   !== -1 ? c[iRemarks]   || '-' : '-',
+      outlet, type, remarks,
+      date:    cell(r, iDate),
+      month:   cell(r, iMonth),
+      quarter: cell(r, iQuarter),
     });
   }
   return rows;
