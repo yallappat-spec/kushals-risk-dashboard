@@ -1602,6 +1602,7 @@ function parseAuditTable(table) {
   const iMonth   = col(['month'], 2);
   const iQuarter = col(['quarter', 'qtr'], 3);
   const iType    = col(['audittype', 'type'], 4);
+  const iChecklist = col(['checklistpoint', 'checklist', 'checkpoint', 'point'], 5);
   const iRemarks = col(['remarks', 'remark', 'observation', 'observations'], 6);
 
   const cell = (r, i) => {
@@ -1620,6 +1621,7 @@ function parseAuditTable(table) {
     if (outlet === '-' && type === '-' && remarks === '-') continue;  /* skip blanks */
     rows.push({
       outlet, type, remarks,
+      checklist: cell(r, iChecklist),
       date:    cell(r, iDate),
       month:   cell(r, iMonth),
       quarter: cell(r, iQuarter),
@@ -1666,12 +1668,13 @@ function renderAuditTable(data) {
   document.getElementById('auditCount').textContent = data.length + ' rows';
   if (!data.length) {
     document.getElementById('auditBody').innerHTML =
-      '<tr><td colspan="3"><div class="empty">No data matches the selected filters.</div></td></tr>';
+      '<tr><td colspan="4"><div class="empty">No data matches the selected filters.</div></td></tr>';
     return;
   }
   document.getElementById('auditBody').innerHTML = data.map(r => `<tr>
       <td style="font-weight:600;white-space:nowrap">${r.outlet}</td>
       <td style="white-space:nowrap">${r.type}</td>
+      <td>${r.checklist}</td>
       <td class="issues-obs">${r.remarks}</td>
     </tr>`).join('');
 }
@@ -1679,9 +1682,9 @@ function renderAuditTable(data) {
 function exportAuditCSV() {
   const data = getFilteredAudit();
   if (!data.length) return;
-  const headers = ['Outlet Name','Audit Type','Remarks'];
+  const headers = ['Outlet Name','Audit Type','Checklist Point','Remarks'];
   const rows = data.map(r =>
-    [r.outlet, r.type, r.remarks]
+    [r.outlet, r.type, r.checklist, r.remarks]
       .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
   );
   const csv = [headers.join(','), ...rows].join('\n');
