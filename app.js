@@ -15,6 +15,7 @@ let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
 let pChart = null;
 let rmChart = null;
+let clauseChart = null;
 let cardFilter    = null; // 'high' | 'medium' | 'low' | 'shrinkage' | 'fraud' | 'ops' | null
 
 /* Default Google Sheet — always loaded on page open */
@@ -114,6 +115,7 @@ function parseCSV(text) {
   const iCM     = col(['cmname', 'cm', 'clustermanager', 'cmname']);
   const iRM     = col(['rmname', 'rm', 'regionalmanager', 'rmname']);
   const iMonth  = col(['month', 'monthname']);
+  const iMarket = col(['market', 'marketname', 'markettype']);
   /* Accept "Shrinakge" typo from real sheet alongside correct spelling */
   const iShrink = col(['shrinkage', 'shrinkage%', 'shrinkagepct', 'shrinakge', 'shrinakge%']);
   const iOps    = col(['opsscore', 'opscore', 'operationsscore', 'operationscore', 'operationscorecard', 'opsscore%']);
@@ -139,7 +141,8 @@ function parseCSV(text) {
       ? c[iRegion] : storeCodeToRegion(storeName);
     const cm    = iCM    !== -1 ? (c[iCM]    || '-') : '-';
     const rm    = iRM    !== -1 ? (c[iRM]    || '-') : '-';
-    const month = iMonth !== -1 ? (c[iMonth] || '-') : '-';
+    const month  = iMonth  !== -1 ? (c[iMonth]  || '-') : '-';
+    const market = iMarket !== -1 ? (c[iMarket] || '-') : '-';
 
     const shRaw = (c[iShrink] || '').replace(/\s/g, '');
     /* OpsScore column may not exist in data sheet — sourced from issues sheet instead */
@@ -159,17 +162,17 @@ function parseCSV(text) {
 
     /* If OpsScore present in data sheet use it; otherwise mark pending (will be filled from issues sheet) */
     if (!opRaw || opRaw === '-') {
-      rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore: null, fraud, pending: true });
+      rows.push({ store: storeName, region, cm, rm, month, market, shrinkage, opsScore: null, fraud, pending: true });
       continue;
     }
     const opNum = parseFloat(opRaw.replace('%', ''));
     if (isNaN(opNum)) {
-      rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore: null, fraud, pending: true });
+      rows.push({ store: storeName, region, cm, rm, month, market, shrinkage, opsScore: null, fraud, pending: true });
       continue;
     }
     const opsScore = opRaw.includes('%') ? opNum : (opNum <= 1 ? opNum * 100 : opNum);
 
-    rows.push({ store: storeName, region, cm, rm, month, shrinkage, opsScore, fraud, pending: false });
+    rows.push({ store: storeName, region, cm, rm, month, market, shrinkage, opsScore, fraud, pending: false });
   }
 
   if (!rows.length) {
@@ -444,6 +447,8 @@ function rebuildFilters() {
     if (values.includes(cur)) sel.value = cur;
   }
   rebuild('regionFilter', [...new Set(activeStores.map(s => s.region))].sort(), 'All');
+  rebuild('outletFilter', [...new Set(activeStores.map(s => s.store))].sort(), 'All');
+  rebuild('marketFilter', [...new Set(activeStores.map(s => s.market).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('cmFilter',     [...new Set(activeStores.map(s => s.cm).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('rmFilter',     [...new Set(activeStores.map(s => s.rm).filter(v => v && v !== '-'))].sort(), 'All');
 }
@@ -466,14 +471,18 @@ function rebuildRegionFilter() { rebuildFilters(); }
    FILTERS & SORTING
    ============================================================ */
 function getFiltered() {
-  const reg  = document.getElementById('regionFilter').value;
+  const reg    = document.getElementById('regionFilter').value;
+  const outlet = document.getElementById('outletFilter').value;
+  const market = document.getElementById('marketFilter').value;
   const cm   = document.getElementById('cmFilter').value;
   const rm   = document.getElementById('rmFilter').value;
   const risk = document.getElementById('riskFilter').value;
   const sort = document.getElementById('sortFilter').value;
 
   let data = activeStores.filter(s =>
-    (reg  === 'all' || s.region === reg) &&
+    (reg    === 'all' || s.region === reg) &&
+    (outlet === 'all' || s.store  === outlet) &&
+    (market === 'all' || s.market === market) &&
     (cm   === 'all' || s.cm    === cm) &&
     (rm   === 'all' || s.rm    === rm) &&
     (risk === 'all' || s.level === risk) &&
@@ -507,6 +516,7 @@ function applyFilters() {
   renderKPIs(data);
   renderTable(data);
   renderCharts(data);
+  renderClauseChart(data);
 }
 
 /* ============================================================
@@ -667,6 +677,76 @@ function renderCharts(data) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
+    },
+  });
+}
+
+/* ============================================================
+   RENDER — TOP 5 AUDIT CLAUSES (cluster / RM wise)
+   Counts "Audit Clause" occurrences in the issues sheet for
+   the stores currently in view, so the Region / Outlet /
+   Market / CM (cluster) / RM / Month filters all apply.
+   ============================================================ */
+function renderClauseChart(data) {
+  const canvas  = document.getElementById('clauseChart');
+  const emptyEl = document.getElementById('clauseChartEmpty');
+  const wrapEl  = document.getElementById('clauseChartWrap');
+  if (!canvas || !emptyEl || !wrapEl) return;
+
+  const storesInView = new Set(data.map(s => s.store));
+  const period = document.getElementById('opsPeriodFilter')?.value || 'latest';
+
+  const rows = issuesData.filter(r =>
+    storesInView.has(r.store) &&
+    (period === 'latest' || r.period === period) &&
+    r.clause && r.clause !== '-'
+  );
+
+  const counts = {};
+  rows.forEach(r => { counts[r.clause] = (counts[r.clause] || 0) + 1; });
+  const top5 = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  if (clauseChart) { clauseChart.destroy(); clauseChart = null; }
+
+  if (!top5.length) {
+    emptyEl.textContent = issuesData.length
+      ? 'No audit clause issues match the current filter selection.'
+      : 'Audit clause data loads from the "Operation scorecard issues" sheet…';
+    emptyEl.style.display = '';
+    wrapEl.style.display  = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  wrapEl.style.display  = '';
+
+  const palette = ['#4a7fcb', '#ef9f27', '#e24b4a', '#639922', '#9b59b6'];
+  clauseChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: top5.map(([c]) => c.length > 60 ? c.slice(0, 57) + '…' : c),
+      datasets: [{
+        label: 'Issues',
+        data: top5.map(([, n]) => n),
+        backgroundColor: top5.map((_, i) => palette[i % palette.length]),
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { title: items => top5[items[0].dataIndex][0] } },
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { precision: 0, font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.06)' },
+        },
+        y: { ticks: { font: { size: 11 } } },
+      },
     },
   });
 }

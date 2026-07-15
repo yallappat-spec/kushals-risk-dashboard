@@ -95,6 +95,10 @@
     <div class="filter-row">
       <label>Region:</label>
       <select id="regionFilter" onchange="applyFilters()"><option value="all">All</option></select>
+      <label>Outlet:</label>
+      <select id="outletFilter" onchange="applyFilters()"><option value="all">All</option></select>
+      <label>Market:</label>
+      <select id="marketFilter" onchange="applyFilters()"><option value="all">All</option></select>
       <label>CM Name:</label>
       <select id="cmFilter" onchange="applyFilters()"><option value="all">All</option></select>
       <label>RM Name:</label>
@@ -140,6 +144,15 @@
         <div class="chart-wrap">
           <canvas id="pieChart" role="img" aria-label="Donut chart showing risk distribution">Risk distribution.</canvas>
         </div>
+      </div>
+    </div>
+
+    <!-- ===== TOP 5 AUDIT CLAUSES CHART ===== -->
+    <div class="chart-card" style="margin-bottom:16px">
+      <div class="chart-label">Top 5 Audit Clauses — cluster (CM) / RM wise <span style="font-weight:400;color:#9b9b98">&nbsp;follows the filters above</span></div>
+      <div id="clauseChartEmpty" style="display:none;color:#9b9b98;font-style:italic;font-size:13px;padding:16px 0"></div>
+      <div class="chart-wrap" id="clauseChartWrap" style="height:260px">
+        <canvas id="clauseChart" role="img" aria-label="Top 5 audit clauses for the current filter selection">Top 5 audit clauses.</canvas>
       </div>
     </div>
 
