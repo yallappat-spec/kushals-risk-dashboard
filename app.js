@@ -10,6 +10,8 @@ let issuesData    = [];
 let shrinkageData = [];
 let shortageData  = [];
 let auditData     = [];
+let enrollData    = [];
+let enrollMonths  = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -220,8 +222,8 @@ function enrichStoresWithOpsScores(selectedPeriod) {
         scoreMap[r.store] = { score, period: r.period, periodNum };
       }
     } else {
-      /* exact period match */
-      if (r.period === selectedPeriod) {
+      /* tolerant period match (case/space/year insensitive) */
+      if (periodsMatch(r.period, selectedPeriod)) {
         scoreMap[r.store] = { score, period: r.period, periodNum };
       }
     }
@@ -274,6 +276,11 @@ function clearData() {
   renderAuditTable([]);
   document.getElementById('auditCount').textContent = '';
   document.getElementById('auditStatus').className = 'upload-status';
+  enrollData = [];
+  enrollMonths = [];
+  renderEnrollTable([]);
+  document.getElementById('enrollCount').textContent = '';
+  document.getElementById('enrollStatus').className = 'upload-status';
 }
 
 /* ============================================================
@@ -368,6 +375,7 @@ async function loadFromGoogleSheet() {
     loadShrinkageSheet();
     loadShortageSheet();
     loadAuditSheet();
+    loadEnrollSheet();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
   } finally {
@@ -448,6 +456,7 @@ function rebuildFilters() {
   }
   rebuild('regionFilter', [...new Set(activeStores.map(s => s.region))].sort(), 'All');
   rebuild('outletFilter', [...new Set(activeStores.map(s => s.store))].sort(), 'All');
+  rebuildOpsPeriodFilter(); /* pick up months from the main sheet's Month column too */
   rebuild('marketFilter', [...new Set(activeStores.map(s => s.market).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('cmFilter',     [...new Set(activeStores.map(s => s.cm).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('rmFilter',     [...new Set(activeStores.map(s => s.rm).filter(v => v && v !== '-'))].sort(), 'All');
@@ -457,11 +466,43 @@ function rebuildOpsPeriodFilter() {
   const sel = document.getElementById('opsPeriodFilter');
   if (!sel) return;
   const cur = sel.value;
-  const periods = [...new Set(issuesData.map(r => r.period).filter(v => v && v !== '-'))]
-    .sort((a, b) => parsePeriodToNum(b) - parsePeriodToNum(a)); /* newest first */
+  /* Union of Period values from the issues sheet and Month values from the
+     main data sheet, deduped case-insensitively so "april" / "April " merge */
+  const seen = {};
+  function add(raw) {
+    const p = (raw || '').toString().trim();
+    if (!p || p === '-') return;
+    const key = p.toLowerCase();
+    if (!seen[key]) seen[key] = p;
+  }
+  issuesData.forEach(r => add(r.period));
+  activeStores.forEach(s => add(s.month));
+  /* Drop year-less variants when a dated one for the same month exists,
+     so "May" and "May 2026" don't appear as two options */
+  let periods = Object.values(seen);
+  periods = periods.filter(p =>
+    /\d{4}/.test(p) || !periods.some(q => q !== p && /\d{4}/.test(q) && periodsMatch(p, q))
+  );
+  periods.sort((a, b) => parsePeriodToNum(b) - parsePeriodToNum(a)); /* newest first */
   sel.innerHTML = '<option value="latest">Latest</option>' +
     periods.map(v => `<option value="${v}">${v}</option>`).join('');
   if (periods.includes(cur)) sel.value = cur;
+}
+
+/* Tolerant period comparison: trims, ignores case, and treats
+   "May" and "May 2026" as the same month when one side has no year */
+function periodsMatch(a, b) {
+  const pa = (a || '').toString().trim().toLowerCase();
+  const pb = (b || '').toString().trim().toLowerCase();
+  if (!pa || !pb) return false;
+  if (pa === pb) return true;
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const ma = months.findIndex(m => pa.startsWith(m));
+  const mb = months.findIndex(m => pb.startsWith(m));
+  if (ma === -1 || mb === -1 || ma !== mb) return false;
+  const ya = (pa.match(/(\d{4})/) || [])[1];
+  const yb = (pb.match(/(\d{4})/) || [])[1];
+  return !ya || !yb || ya === yb; /* same month; years must agree when both given */
 }
 
 /* Keep old name as alias so existing calls still work */
@@ -698,7 +739,7 @@ function renderClauseChart(data) {
 
   const rows = issuesData.filter(r =>
     storesInView.has(r.store) &&
-    (period === 'latest' || r.period === period) &&
+    (period === 'latest' || periodsMatch(r.period, period)) &&
     r.clause && r.clause !== '-'
   );
 
@@ -779,6 +820,7 @@ function startAutoRefresh() {
       loadShrinkageSheet();
       loadShortageSheet();
       loadAuditSheet();
+      loadEnrollSheet();
     } catch (_) { /* silently skip failed auto-refresh */ }
   }, AUTO_REFRESH_MS);
   updateRefreshBadge(true);
@@ -823,15 +865,21 @@ function switchPageTab(tab) {
   document.getElementById('pageShrinkage').style.display = tab === 'shrinkage' ? '' : 'none';
   document.getElementById('pageShortage').style.display  = tab === 'shortage'  ? '' : 'none';
   document.getElementById('pageAudit').style.display     = tab === 'audit'     ? '' : 'none';
+  document.getElementById('pageEnroll').style.display    = tab === 'enroll'    ? '' : 'none';
   document.getElementById('ptab-risk').classList.toggle('active',      tab === 'risk');
   document.getElementById('ptab-issues').classList.toggle('active',    tab === 'issues');
   document.getElementById('ptab-shrinkage').classList.toggle('active', tab === 'shrinkage');
   document.getElementById('ptab-shortage').classList.toggle('active',  tab === 'shortage');
   document.getElementById('ptab-audit').classList.toggle('active',     tab === 'audit');
+  document.getElementById('ptab-enroll').classList.toggle('active',    tab === 'enroll');
   if (tab === 'issues'    && issuesData.length    === 0) loadIssuesSheet();
   if (tab === 'shrinkage' && shrinkageData.length === 0) loadShrinkageSheet();
   if (tab === 'shortage'  && shortageData.length  === 0) loadShortageSheet();
   if (tab === 'audit'     && auditData.length     === 0) loadAuditSheet();
+  if (tab === 'enroll') {
+    if (enrollData.length === 0) loadEnrollSheet();
+    else applyEnrollFilters(); /* re-render charts now that the tab is visible */
+  }
 }
 
 function toggleStoreIssues(storeName, el) {
@@ -1771,5 +1819,334 @@ function exportAuditCSV() {
   const a   = document.createElement('a');
   a.href    = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'kushals_audit_types_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+}
+
+/* ============================================================
+   CUSTOMER ENROLLMENT TAB
+   Loads the "Customer Enrollment" sheet and shows each outlet's
+   enrollment % month on month, filterable by RM / Cluster (CM) /
+   Outlet / Market, with trend and RM-comparison charts.
+   Accepts two sheet layouts:
+     WIDE : Outlet | [Market] | Apr | May | Jun ...
+     LONG : Outlet | [Market] | Month | Enrollment %
+   ============================================================ */
+let enrollTrendChartObj = null;
+let enrollRmChartObj    = null;
+
+const ENROLL_SHEET_NAMES = [
+  'Customer Enrollment', 'Customer enrollment', 'customer enrollment',
+  'CUSTOMER ENROLLMENT', 'Customer Enrolment', 'Customer enrolment',
+  'Enrollment', 'Enrolment',
+];
+const ENROLL_MONTH_NAMES = ['january','february','march','april','may','june',
+                            'july','august','september','october','november','december'];
+
+/* "Apr", "April", "April 2026", "apr-25" → sortable key; 0 = not a month */
+function enrollMonthKey(p) {
+  const lower = (p || '').toString().toLowerCase().trim();
+  const mi = ENROLL_MONTH_NAMES.findIndex(m => m.slice(0, 3) === lower.slice(0, 3));
+  if (mi === -1) return 0;
+  const y = (lower.match(/(\d{4})/) || [])[1];
+  return (y ? parseInt(y) * 100 : 0) + mi + 1;
+}
+
+function toEnrollCSVUrl(mainUrl, sheetName) {
+  const idMatch = mainUrl.trim().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!idMatch) return null;
+  return 'https://docs.google.com/spreadsheets/d/' + idMatch[1] +
+    '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(sheetName);
+}
+
+function showEnrollStatus(msg, type) {
+  const el = document.getElementById('enrollStatus');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.className = 'upload-status' + (type ? ' ' + type : '');
+}
+
+async function loadEnrollSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) {
+    showEnrollStatus('Enrollment data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
+    return;
+  }
+  showEnrollStatus('Loading customer enrollment data…', '');
+
+  for (const name of ENROLL_SHEET_NAMES) {
+    const csvUrl = toEnrollCSVUrl(raw, name);
+    if (!csvUrl) return;
+    try {
+      const res = await fetch(csvUrl);
+      if (!res.ok) continue;
+      const text = await res.text();
+      const parsed = parseEnrollCSV(text);
+      if (!parsed.rows.length) continue;
+
+      const storeMap = {};
+      activeStores.forEach(s => {
+        storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-', market: s.market || '-' };
+      });
+      enrollMonths = parsed.months;
+      enrollData = parsed.rows.map(r => ({
+        ...r,
+        cm:     storeMap[r.outlet]?.cm || '-',
+        rm:     storeMap[r.outlet]?.rm || '-',
+        market: (r.market && r.market !== '-') ? r.market : (storeMap[r.outlet]?.market || '-'),
+      }));
+      rebuildEnrollFilters();
+      applyEnrollFilters();
+      showEnrollStatus('', '');
+      return;
+    } catch (_) { /* try the next candidate tab name */ }
+  }
+  showEnrollStatus('&#10007; Could not find a "Customer Enrollment" tab in the Google Sheet. ' +
+    'Please check the tab name (tried: ' + ENROLL_SHEET_NAMES.slice(0, 4).join(', ') + '…).', 'err');
+}
+
+function parseEnrollCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return { rows: [], months: [] };
+
+  const rawHdrs = allRows[0];
+  const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
+  if (iOutlet === -1) iOutlet = 0; /* fall back to first column */
+  const iMarket = col('market', 'marketname', 'markettype');
+  const iMonth  = col('month', 'period', 'monthname');
+  const iVal    = col('enrollment', 'enrolment', 'enrollmentpct', 'enrolmentpct',
+                      'enrollmentpercentage', 'enrolmentpercentage', 'percentage', 'pct', 'value');
+
+  const num = raw => {
+    const v = parseFloat((raw || '').toString().replace(/[%,\s]/g, ''));
+    return isNaN(v) ? null : v;
+  };
+
+  /* LONG layout: one row per outlet per month */
+  if (iMonth !== -1 && iVal !== -1) {
+    const map = {}, monthsSeen = {};
+    for (let i = 1; i < allRows.length; i++) {
+      const c = allRows[i];
+      const outlet = (c[iOutlet] || '').trim();
+      const month  = (c[iMonth]  || '').trim();
+      if (!outlet || !month) continue;
+      monthsSeen[month] = true;
+      if (!map[outlet]) {
+        map[outlet] = { outlet, market: iMarket !== -1 ? (c[iMarket] || '-') : '-', values: {} };
+      }
+      map[outlet].values[month] = num(c[iVal]);
+    }
+    const months = Object.keys(monthsSeen).sort((a, b) => enrollMonthKey(a) - enrollMonthKey(b));
+    return { rows: Object.values(map), months };
+  }
+
+  /* WIDE layout: month columns across the header */
+  const monthCols = [];
+  rawHdrs.forEach((h, i) => {
+    if (i === iOutlet || i === iMarket) return;
+    if (enrollMonthKey(h) > 0) monthCols.push({ i, label: h.trim() });
+  });
+  if (!monthCols.length) return { rows: [], months: [] };
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    const outlet = (c[iOutlet] || '').trim();
+    if (!outlet) continue;
+    const values = {};
+    monthCols.forEach(mc => { values[mc.label] = num(c[mc.i]); });
+    rows.push({ outlet, market: iMarket !== -1 ? (c[iMarket] || '-') : '-', values });
+  }
+  return { rows, months: monthCols.map(mc => mc.label) };
+}
+
+function rebuildEnrollFilters() {
+  function rebuild(id, values) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">All</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  rebuild('enrollRmFilter',     [...new Set(enrollData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
+  rebuild('enrollCmFilter',     [...new Set(enrollData.map(r => r.cm).filter(v => v && v !== '-'))].sort());
+  rebuild('enrollOutletFilter', [...new Set(enrollData.map(r => r.outlet))].sort());
+  rebuild('enrollMarketFilter', [...new Set(enrollData.map(r => r.market).filter(v => v && v !== '-'))].sort());
+}
+
+function getFilteredEnroll() {
+  const rm     = document.getElementById('enrollRmFilter').value;
+  const cm     = document.getElementById('enrollCmFilter').value;
+  const outlet = document.getElementById('enrollOutletFilter').value;
+  const market = document.getElementById('enrollMarketFilter').value;
+  return enrollData.filter(r =>
+    (rm     === 'all' || r.rm     === rm)     &&
+    (cm     === 'all' || r.cm     === cm)     &&
+    (outlet === 'all' || r.outlet === outlet) &&
+    (market === 'all' || r.market === market)
+  ).sort((a, b) => a.outlet.localeCompare(b.outlet));
+}
+
+function applyEnrollFilters() {
+  const data = getFilteredEnroll();
+  renderEnrollCharts(data);
+  renderEnrollTable(data);
+}
+
+function renderEnrollTable(data) {
+  const head  = document.getElementById('enrollHeadRow');
+  const body  = document.getElementById('enrollBody');
+  const count = document.getElementById('enrollCount');
+  if (!head || !body) return;
+  count.textContent = data.length ? data.length + ' outlets' : '';
+
+  head.innerHTML = '<th>Outlet Name</th><th>Market</th><th>Cluster (CM)</th><th>RM Name</th>' +
+    enrollMonths.map(m => `<th>${m}</th>`).join('');
+
+  if (!data.length) {
+    body.innerHTML = `<tr><td colspan="${4 + enrollMonths.length}">` +
+      '<div class="empty">No enrollment data matches the selected filters.</div></td></tr>';
+    return;
+  }
+
+  body.innerHTML = data.map(r => {
+    const cells = enrollMonths.map((m, idx) => {
+      const v = r.values[m];
+      if (v === null || v === undefined) return '<td style="color:#aaa">-</td>';
+      /* month-on-month delta vs the previous month that has a value */
+      let delta = '';
+      for (let j = idx - 1; j >= 0; j--) {
+        const pv = r.values[enrollMonths[j]];
+        if (pv !== null && pv !== undefined) {
+          const d     = v - pv;
+          const color = d >= 0 ? '#2a5c14' : '#a32d2d';
+          const arrow = d >= 0 ? '&#9650;' : '&#9660;';
+          delta = ` <span style="color:${color};font-size:11px">${arrow}${Math.abs(d).toFixed(1)}</span>`;
+          break;
+        }
+      }
+      return `<td style="font-weight:600">${v.toFixed(1)}%${delta}</td>`;
+    }).join('');
+    return `<tr>
+      <td>${r.outlet}</td>
+      <td style="color:#6b6b68">${r.market || '-'}</td>
+      <td style="color:#6b6b68">${r.cm || '-'}</td>
+      <td style="color:#6b6b68">${r.rm || '-'}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+}
+
+function renderEnrollCharts(data) {
+  const trendEl = document.getElementById('enrollTrendChart');
+  const rmEl    = document.getElementById('enrollRmChart');
+  if (!trendEl || !rmEl) return;
+
+  /* Trend: average enrollment % per month across the filtered outlets */
+  const avgs = enrollMonths.map(m => {
+    let sum = 0, n = 0;
+    data.forEach(r => {
+      const v = r.values[m];
+      if (v !== null && v !== undefined) { sum += v; n++; }
+    });
+    return n ? parseFloat((sum / n).toFixed(2)) : null;
+  });
+
+  if (enrollTrendChartObj) { enrollTrendChartObj.destroy(); enrollTrendChartObj = null; }
+  enrollTrendChartObj = new Chart(trendEl, {
+    type: 'line',
+    data: {
+      labels: enrollMonths,
+      datasets: [{
+        label: 'Avg enrollment %',
+        data: avgs,
+        borderColor: '#4a7fcb',
+        backgroundColor: 'rgba(74,127,203,0.12)',
+        fill: true,
+        tension: 0.3,
+        spanGaps: true,
+        pointRadius: 4,
+        pointBackgroundColor: '#4a7fcb',
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+        x: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+
+  /* Latest month: average enrollment % by RM */
+  const latest = enrollMonths[enrollMonths.length - 1];
+  const lbl = document.getElementById('enrollRmChartLabel');
+  if (lbl) lbl.innerHTML = 'Avg enrollment % by RM &mdash; ' + (latest || 'latest month');
+
+  const rmMap = {};
+  data.forEach(r => {
+    const v = r.values[latest];
+    if (v === null || v === undefined) return;
+    const rm = r.rm && r.rm !== '-' ? r.rm : 'Unassigned';
+    if (!rmMap[rm]) rmMap[rm] = { sum: 0, n: 0 };
+    rmMap[rm].sum += v;
+    rmMap[rm].n   += 1;
+  });
+  const labels  = Object.keys(rmMap)
+    .sort((a, b) => rmMap[b].sum / rmMap[b].n - rmMap[a].sum / rmMap[a].n);
+  const vals    = labels.map(rm => parseFloat((rmMap[rm].sum / rmMap[rm].n).toFixed(2)));
+  const palette = ['#4a7fcb','#ef9f27','#e24b4a','#639922','#9b59b6',
+                   '#1abc9c','#e67e22','#e91e63','#00bcd4','#8bc34a'];
+
+  if (enrollRmChartObj) { enrollRmChartObj.destroy(); enrollRmChartObj = null; }
+  enrollRmChartObj = new Chart(rmEl, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg enrollment %',
+        data: vals,
+        backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+        y: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+function exportEnrollCSV() {
+  const data = getFilteredEnroll();
+  if (!data.length) return;
+  const headers = ['Outlet Name', 'Market', 'Cluster (CM)', 'RM Name', ...enrollMonths];
+  const rows = data.map(r => [
+    r.outlet, r.market || '-', r.cm || '-', r.rm || '-',
+    ...enrollMonths.map(m => {
+      const v = r.values[m];
+      return (v === null || v === undefined) ? '-' : v.toFixed(1) + '%';
+    }),
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_customer_enrollment_' + date + '.csv';
   a.click();
 }
