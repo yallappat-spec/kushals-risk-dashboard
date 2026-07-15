@@ -26,6 +26,7 @@
     <button class="ptab"        id="ptab-shrinkage" onclick="switchPageTab('shrinkage')">&#128200; Shrinkage %</button>
     <button class="ptab"        id="ptab-shortage"  onclick="switchPageTab('shortage')">&#128230; Shortage Items</button>
     <button class="ptab"        id="ptab-audit"     onclick="switchPageTab('audit')">&#128221; Audit Types</button>
+    <button class="ptab"        id="ptab-enroll"    onclick="switchPageTab('enroll')">&#128101; Customer Enrollment</button>
   </div>
 
   <!-- ===== DATA SOURCE BAR ===== -->
@@ -373,6 +374,56 @@
     <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Audit Types</div>
 
   </div><!-- end pageAudit -->
+
+  <!-- ===== CUSTOMER ENROLLMENT TAB ===== -->
+  <div id="pageEnroll" style="display:none">
+
+    <div id="enrollStatus" class="upload-status" style="margin-bottom:12px"></div>
+
+    <div class="filter-row">
+      <label>RM Name:</label>
+      <select id="enrollRmFilter"     onchange="applyEnrollFilters()"><option value="all">All</option></select>
+      <label>Cluster (CM):</label>
+      <select id="enrollCmFilter"     onchange="applyEnrollFilters()"><option value="all">All</option></select>
+      <label>Outlet:</label>
+      <select id="enrollOutletFilter" onchange="applyEnrollFilters()"><option value="all">All</option></select>
+      <label>Market:</label>
+      <select id="enrollMarketFilter" onchange="applyEnrollFilters()"><option value="all">All</option></select>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label">Enrollment % &mdash; month on month trend</div>
+        <div class="chart-wrap">
+          <canvas id="enrollTrendChart" role="img" aria-label="Average enrollment percentage by month">Enrollment trend.</canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label" id="enrollRmChartLabel">Avg enrollment % by RM &mdash; latest month</div>
+        <div class="chart-wrap">
+          <canvas id="enrollRmChart" role="img" aria-label="Average enrollment percentage by RM for the latest month">Enrollment by RM.</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-hdr">
+      <div class="sec-title">Customer Enrollment &mdash; outlet month on month %</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="enrollCount"></div>
+        <button class="btn-export" onclick="exportEnrollCSV()">&#8595; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr id="enrollHeadRow"></tr></thead>
+        <tbody id="enrollBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Customer Enrollment</div>
+
+  </div><!-- end pageEnroll -->
 
 </div>
 
