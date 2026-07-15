@@ -110,7 +110,7 @@ function parseCSV(text) {
     return -1;
   }
 
-  const iStore  = col(['store', 'storename']);
+  const iStore  = col(['store', 'storename', 'outlets', 'outlet', 'outletname', 'outletnames']);
   const iRegion = col(['region']);
   const iCM     = col(['cmname', 'cm', 'clustermanager', 'cmname']);
   const iRM     = col(['rmname', 'rm', 'regionalmanager', 'rmname']);
@@ -123,7 +123,7 @@ function parseCSV(text) {
   const iFraud  = col(['fraud', 'fraudredflags', 'fraudredflag', 'fraudredflag(s)']);
 
   const missing = [
-    ['Store', iStore],
+    ['Store / Outlets', iStore],
     ['Shrinkage / Shrinakge', iShrink],
   ].filter(([, v]) => v === -1).map(([k]) => k);
 
@@ -994,7 +994,7 @@ function parseIssuesCSV(text) {
     return -1;
   }
 
-  const iStore   = col('store', 'storename');
+  const iStore   = col('store', 'storename', 'outlets', 'outlet', 'outletname');
   const iPeriod  = col('period', 'month');
   const iScore   = col('score', 'scorepct');
   const iSection = col('section');
@@ -1114,7 +1114,7 @@ function parseShrinkageCSV(text) {
     return -1;
   }
 
-  const iOutlet  = col('outletname', 'outlet', 'store', 'storename');
+  const iOutlet  = col('outletname', 'outlet', 'outlets', 'store', 'storename');
   const iQtr     = col('quarter', 'qtr');
   const iShrPct  = col('shrinkage', 'shrinkagepct');  /* Shrinkage % → 'shrinkage' */
   const iShrVal  = col('shrinkagevalue', 'shrinkageval');
@@ -1368,7 +1368,7 @@ function parseShortageCSV(text, storeMap) {
     return -1;
   }
 
-  const iStore    = col('storename', 'store', 'outletname', 'outlet');
+  const iStore    = col('storename', 'store', 'outletname', 'outlet', 'outlets');
   const iCategory = col('category', 'itemcategory', 'itemtype', 'type');
   const iPeriod   = col('period', 'month', 'quarter', 'date', 'qtr');
   const iItemName = col('itemname', 'item', 'itemdesc', 'description', 'productname', 'product');
@@ -1376,7 +1376,7 @@ function parseShortageCSV(text, storeMap) {
   const iAdjQty   = col('adjqty', 'adjustedqty', 'adjustedquantity', 'adjquantity');
   const iStyle    = col('style', 'stylename', 'styletype');
   const iBrand    = col('brand', 'brandname');
-  const iOutlet   = col('outletname', 'outlet', 'storename', 'store');
+  const iOutlet   = col('outletname', 'outlet', 'outlets', 'storename', 'store');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
@@ -1677,7 +1677,7 @@ function parseAuditTable(table) {
     }
     return fallback;
   }
-  const iOutlet  = col(['outletname', 'outlet', 'store', 'storename'], 0);
+  const iOutlet  = col(['outletname', 'outlet', 'outlets', 'store', 'storename'], 0);
   const iDate    = col(['date'], 1);
   const iMonth   = col(['month'], 2);
   const iQuarter = col(['quarter', 'qtr'], 3);
