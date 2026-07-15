@@ -220,8 +220,8 @@ function enrichStoresWithOpsScores(selectedPeriod) {
         scoreMap[r.store] = { score, period: r.period, periodNum };
       }
     } else {
-      /* exact period match */
-      if (r.period === selectedPeriod) {
+      /* tolerant period match (case/space/year insensitive) */
+      if (periodsMatch(r.period, selectedPeriod)) {
         scoreMap[r.store] = { score, period: r.period, periodNum };
       }
     }
@@ -448,6 +448,7 @@ function rebuildFilters() {
   }
   rebuild('regionFilter', [...new Set(activeStores.map(s => s.region))].sort(), 'All');
   rebuild('outletFilter', [...new Set(activeStores.map(s => s.store))].sort(), 'All');
+  rebuildOpsPeriodFilter(); /* pick up months from the main sheet's Month column too */
   rebuild('marketFilter', [...new Set(activeStores.map(s => s.market).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('cmFilter',     [...new Set(activeStores.map(s => s.cm).filter(v => v && v !== '-'))].sort(), 'All');
   rebuild('rmFilter',     [...new Set(activeStores.map(s => s.rm).filter(v => v && v !== '-'))].sort(), 'All');
@@ -457,11 +458,43 @@ function rebuildOpsPeriodFilter() {
   const sel = document.getElementById('opsPeriodFilter');
   if (!sel) return;
   const cur = sel.value;
-  const periods = [...new Set(issuesData.map(r => r.period).filter(v => v && v !== '-'))]
-    .sort((a, b) => parsePeriodToNum(b) - parsePeriodToNum(a)); /* newest first */
+  /* Union of Period values from the issues sheet and Month values from the
+     main data sheet, deduped case-insensitively so "april" / "April " merge */
+  const seen = {};
+  function add(raw) {
+    const p = (raw || '').toString().trim();
+    if (!p || p === '-') return;
+    const key = p.toLowerCase();
+    if (!seen[key]) seen[key] = p;
+  }
+  issuesData.forEach(r => add(r.period));
+  activeStores.forEach(s => add(s.month));
+  /* Drop year-less variants when a dated one for the same month exists,
+     so "May" and "May 2026" don't appear as two options */
+  let periods = Object.values(seen);
+  periods = periods.filter(p =>
+    /\d{4}/.test(p) || !periods.some(q => q !== p && /\d{4}/.test(q) && periodsMatch(p, q))
+  );
+  periods.sort((a, b) => parsePeriodToNum(b) - parsePeriodToNum(a)); /* newest first */
   sel.innerHTML = '<option value="latest">Latest</option>' +
     periods.map(v => `<option value="${v}">${v}</option>`).join('');
   if (periods.includes(cur)) sel.value = cur;
+}
+
+/* Tolerant period comparison: trims, ignores case, and treats
+   "May" and "May 2026" as the same month when one side has no year */
+function periodsMatch(a, b) {
+  const pa = (a || '').toString().trim().toLowerCase();
+  const pb = (b || '').toString().trim().toLowerCase();
+  if (!pa || !pb) return false;
+  if (pa === pb) return true;
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const ma = months.findIndex(m => pa.startsWith(m));
+  const mb = months.findIndex(m => pb.startsWith(m));
+  if (ma === -1 || mb === -1 || ma !== mb) return false;
+  const ya = (pa.match(/(\d{4})/) || [])[1];
+  const yb = (pb.match(/(\d{4})/) || [])[1];
+  return !ya || !yb || ya === yb; /* same month; years must agree when both given */
 }
 
 /* Keep old name as alias so existing calls still work */
@@ -698,7 +731,7 @@ function renderClauseChart(data) {
 
   const rows = issuesData.filter(r =>
     storesInView.has(r.store) &&
-    (period === 'latest' || r.period === period) &&
+    (period === 'latest' || periodsMatch(r.period, period)) &&
     r.clause && r.clause !== '-'
   );
 
