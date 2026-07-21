@@ -27,6 +27,7 @@
     <button class="ptab"        id="ptab-shortage"  onclick="switchPageTab('shortage')">&#128230; Shortage Items</button>
     <button class="ptab"        id="ptab-audit"     onclick="switchPageTab('audit')">&#128221; Audit Types</button>
     <button class="ptab"        id="ptab-enroll"    onclick="switchPageTab('enroll')">&#128101; Customer Enrollment</button>
+    <button class="ptab"        id="ptab-opssc"     onclick="switchPageTab('opssc')">&#128209; Ops Scorecard</button>
   </div>
 
   <!-- ===== DATA SOURCE BAR ===== -->
@@ -424,6 +425,56 @@
     <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Customer Enrollment</div>
 
   </div><!-- end pageEnroll -->
+
+  <!-- ===== OPERATION SCORECARD TAB ===== -->
+  <div id="pageOpsSc" style="display:none">
+
+    <div id="opsScStatus" class="upload-status" style="margin-bottom:12px"></div>
+
+    <div class="filter-row">
+      <label>RM Name:</label>
+      <select id="opsScRmFilter"     onchange="applyOpsScFilters()"><option value="all">All</option></select>
+      <label>Cluster (CM):</label>
+      <select id="opsScCmFilter"     onchange="applyOpsScFilters()"><option value="all">All</option></select>
+      <label>Outlet:</label>
+      <select id="opsScOutletFilter" onchange="applyOpsScFilters()"><option value="all">All</option></select>
+      <label>Chart month:</label>
+      <select id="opsScMonthFilter"  onchange="applyOpsScFilters()"><option value="latest">Latest</option></select>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label" id="opsScCmChartLabel">Avg scorecard % by Cluster (CM) &mdash; latest month</div>
+        <div class="chart-wrap">
+          <canvas id="opsScCmChart" role="img" aria-label="Average operation scorecard percentage by cluster manager">Scorecard by cluster.</canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label" id="opsScRmChartLabel">Avg scorecard % by RM &mdash; latest month</div>
+        <div class="chart-wrap">
+          <canvas id="opsScRmChart" role="img" aria-label="Average operation scorecard percentage by regional manager">Scorecard by RM.</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-hdr">
+      <div class="sec-title">Operation Scorecard &mdash; store wise, month on month %</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="sec-count" id="opsScCount"></div>
+        <button class="btn-export" onclick="exportOpsScCSV()">&#8595; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr id="opsScHeadRow"></tr></thead>
+        <tbody id="opsScBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">Kushals Fashion Jewellery &bull; Loss Prevention &amp; Audit &bull; Operation Scorecard</div>
+
+  </div><!-- end pageOpsSc -->
 
 </div>
 
