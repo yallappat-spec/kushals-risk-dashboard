@@ -12,6 +12,8 @@ let shortageData  = [];
 let auditData     = [];
 let enrollData    = [];
 let enrollMonths  = [];
+let opsScData     = [];
+let opsScMonths   = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -281,6 +283,11 @@ function clearData() {
   renderEnrollTable([]);
   document.getElementById('enrollCount').textContent = '';
   document.getElementById('enrollStatus').className = 'upload-status';
+  opsScData = [];
+  opsScMonths = [];
+  renderOpsScTable([]);
+  document.getElementById('opsScCount').textContent = '';
+  document.getElementById('opsScStatus').className = 'upload-status';
 }
 
 /* ============================================================
@@ -376,6 +383,7 @@ async function loadFromGoogleSheet() {
     loadShortageSheet();
     loadAuditSheet();
     loadEnrollSheet();
+    loadOpsScSheet();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
   } finally {
@@ -821,6 +829,7 @@ function startAutoRefresh() {
       loadShortageSheet();
       loadAuditSheet();
       loadEnrollSheet();
+      loadOpsScSheet();
     } catch (_) { /* silently skip failed auto-refresh */ }
   }, AUTO_REFRESH_MS);
   updateRefreshBadge(true);
@@ -866,12 +875,14 @@ function switchPageTab(tab) {
   document.getElementById('pageShortage').style.display  = tab === 'shortage'  ? '' : 'none';
   document.getElementById('pageAudit').style.display     = tab === 'audit'     ? '' : 'none';
   document.getElementById('pageEnroll').style.display    = tab === 'enroll'    ? '' : 'none';
+  document.getElementById('pageOpsSc').style.display     = tab === 'opssc'     ? '' : 'none';
   document.getElementById('ptab-risk').classList.toggle('active',      tab === 'risk');
   document.getElementById('ptab-issues').classList.toggle('active',    tab === 'issues');
   document.getElementById('ptab-shrinkage').classList.toggle('active', tab === 'shrinkage');
   document.getElementById('ptab-shortage').classList.toggle('active',  tab === 'shortage');
   document.getElementById('ptab-audit').classList.toggle('active',     tab === 'audit');
   document.getElementById('ptab-enroll').classList.toggle('active',    tab === 'enroll');
+  document.getElementById('ptab-opssc').classList.toggle('active',     tab === 'opssc');
   if (tab === 'issues'    && issuesData.length    === 0) loadIssuesSheet();
   if (tab === 'shrinkage' && shrinkageData.length === 0) loadShrinkageSheet();
   if (tab === 'shortage'  && shortageData.length  === 0) loadShortageSheet();
@@ -879,6 +890,10 @@ function switchPageTab(tab) {
   if (tab === 'enroll') {
     if (enrollData.length === 0) loadEnrollSheet();
     else applyEnrollFilters(); /* re-render charts now that the tab is visible */
+  }
+  if (tab === 'opssc') {
+    if (opsScData.length === 0) loadOpsScSheet();
+    else applyOpsScFilters(); /* re-render charts now that the tab is visible */
   }
 }
 
@@ -2148,5 +2163,310 @@ function exportEnrollCSV() {
   const date = new Date().toISOString().slice(0, 10);
   a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'kushals_customer_enrollment_' + date + '.csv';
+  a.click();
+}
+
+/* ============================================================
+   OPERATION SCORECARD TAB
+   Loads the "Operation scorecard" sheet and shows each store's
+   scorecard % month on month, filterable by RM / Cluster (CM) /
+   Outlet, with cluster-wise and RM-wise average score charts.
+   Accepts two sheet layouts:
+     WIDE : Outlet | Apr | May | Jun ...
+     LONG : Outlet | Month | Score %
+   ============================================================ */
+let opsScCmChartObj = null;
+let opsScRmChartObj = null;
+
+const OPSSC_SHEET_NAMES = [
+  'Operation scorecard', 'Operation Scorecard', 'operation scorecard',
+  'OPERATION SCORECARD', 'Operations scorecard', 'Operations Scorecard',
+  'Operation score card', 'Ops scorecard', 'Ops Scorecard',
+];
+
+function showOpsScStatus(msg, type) {
+  const el = document.getElementById('opsScStatus');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.className = 'upload-status' + (type ? ' ' + type : '');
+}
+
+async function loadOpsScSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) {
+    showOpsScStatus('Operation scorecard data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
+    return;
+  }
+  showOpsScStatus('Loading operation scorecard data…', '');
+
+  for (const name of OPSSC_SHEET_NAMES) {
+    const csvUrl = toEnrollCSVUrl(raw, name); /* same gviz-by-sheet-name URL builder */
+    if (!csvUrl) return;
+    try {
+      const res = await fetch(csvUrl);
+      if (!res.ok) continue;
+      const text = await res.text();
+      const parsed = parseOpsScCSV(text);
+      if (!parsed.rows.length) continue;
+
+      const storeMap = {};
+      activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
+      opsScMonths = parsed.months;
+      opsScData = parsed.rows.map(r => ({
+        ...r,
+        cm: (r.cm && r.cm !== '-') ? r.cm : (storeMap[r.outlet]?.cm || '-'),
+        rm: (r.rm && r.rm !== '-') ? r.rm : (storeMap[r.outlet]?.rm || '-'),
+      }));
+      rebuildOpsScFilters();
+      applyOpsScFilters();
+      showOpsScStatus('', '');
+      return;
+    } catch (_) { /* try the next candidate tab name */ }
+  }
+  showOpsScStatus('&#10007; Could not find an "Operation scorecard" tab in the Google Sheet. ' +
+    'Please check the tab name (tried: ' + OPSSC_SHEET_NAMES.slice(0, 4).join(', ') + '…).', 'err');
+}
+
+/* Score values: "85%", "85", or fraction "0.85" → 85 */
+function opsScNum(raw) {
+  const s = (raw || '').toString().trim();
+  if (!s || s === '-') return null;
+  const v = parseFloat(s.replace(/[%,\s]/g, ''));
+  if (isNaN(v)) return null;
+  return (!s.includes('%') && v > 0 && v <= 1) ? v * 100 : v;
+}
+
+function parseOpsScCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return { rows: [], months: [] };
+
+  const rawHdrs = allRows[0];
+  const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
+  if (iOutlet === -1) iOutlet = 0; /* fall back to first column */
+  const iCM    = col('cmname', 'cm', 'clustermanager', 'cluster');
+  const iRM    = col('rmname', 'rm', 'regionalmanager');
+  const iMonth = col('month', 'period', 'monthname');
+  const iVal   = col('score', 'scorepct', 'scorecard', 'opsscore', 'opscore',
+                     'operationscorecard', 'operationsscorecard', 'operationscore',
+                     'operationsscore', 'percentage', 'pct', 'value');
+
+  /* LONG layout: one row per store per month */
+  if (iMonth !== -1 && iVal !== -1) {
+    const map = {}, monthsSeen = {};
+    for (let i = 1; i < allRows.length; i++) {
+      const c = allRows[i];
+      const outlet = (c[iOutlet] || '').trim();
+      const month  = (c[iMonth]  || '').trim();
+      if (!outlet || !month) continue;
+      const v = opsScNum(c[iVal]);
+      monthsSeen[month] = true;
+      if (!map[outlet]) {
+        map[outlet] = {
+          outlet,
+          cm: iCM !== -1 ? (c[iCM] || '-') : '-',
+          rm: iRM !== -1 ? (c[iRM] || '-') : '-',
+          values: {},
+        };
+      }
+      if (v !== null || map[outlet].values[month] === undefined) map[outlet].values[month] = v;
+    }
+    const months = Object.keys(monthsSeen).sort((a, b) => enrollMonthKey(a) - enrollMonthKey(b));
+    return { rows: Object.values(map), months };
+  }
+
+  /* WIDE layout: month columns across the header */
+  const monthCols = [];
+  rawHdrs.forEach((h, i) => {
+    if (i === iOutlet || i === iCM || i === iRM) return;
+    if (enrollMonthKey(h) > 0) monthCols.push({ i, label: h.trim() });
+  });
+  if (!monthCols.length) return { rows: [], months: [] };
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    const outlet = (c[iOutlet] || '').trim();
+    if (!outlet) continue;
+    const values = {};
+    monthCols.forEach(mc => { values[mc.label] = opsScNum(c[mc.i]); });
+    rows.push({
+      outlet,
+      cm: iCM !== -1 ? (c[iCM] || '-') : '-',
+      rm: iRM !== -1 ? (c[iRM] || '-') : '-',
+      values,
+    });
+  }
+  return { rows, months: monthCols.map(mc => mc.label) };
+}
+
+function rebuildOpsScFilters() {
+  function rebuild(id, values) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">All</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  rebuild('opsScRmFilter',     [...new Set(opsScData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
+  rebuild('opsScCmFilter',     [...new Set(opsScData.map(r => r.cm).filter(v => v && v !== '-'))].sort());
+  rebuild('opsScOutletFilter', [...new Set(opsScData.map(r => r.outlet))].sort());
+
+  const monthSel = document.getElementById('opsScMonthFilter');
+  if (monthSel) {
+    const cur = monthSel.value;
+    monthSel.innerHTML = '<option value="latest">Latest</option>' +
+      [...opsScMonths].reverse().map(m => `<option value="${m}">${m}</option>`).join('');
+    if (opsScMonths.includes(cur)) monthSel.value = cur;
+  }
+}
+
+function getFilteredOpsSc() {
+  const rm     = document.getElementById('opsScRmFilter').value;
+  const cm     = document.getElementById('opsScCmFilter').value;
+  const outlet = document.getElementById('opsScOutletFilter').value;
+  return opsScData.filter(r =>
+    (rm     === 'all' || r.rm     === rm)     &&
+    (cm     === 'all' || r.cm     === cm)     &&
+    (outlet === 'all' || r.outlet === outlet)
+  ).sort((a, b) => a.outlet.localeCompare(b.outlet));
+}
+
+function applyOpsScFilters() {
+  const data = getFilteredOpsSc();
+  renderOpsScCharts(data);
+  renderOpsScTable(data);
+}
+
+/* Colour by the same thresholds as risk scoring: >=90 green, 80–89 amber, <80 red */
+function opsScColor(v) {
+  return v >= 90 ? '#2a5c14' : v >= 80 ? '#854f0b' : '#a32d2d';
+}
+
+function renderOpsScTable(data) {
+  const head  = document.getElementById('opsScHeadRow');
+  const body  = document.getElementById('opsScBody');
+  const count = document.getElementById('opsScCount');
+  if (!head || !body) return;
+  count.textContent = data.length ? data.length + ' stores' : '';
+
+  head.innerHTML = '<th>Store Name</th><th>Cluster (CM)</th><th>RM Name</th>' +
+    opsScMonths.map(m => `<th>${m}</th>`).join('');
+
+  if (!data.length) {
+    body.innerHTML = `<tr><td colspan="${3 + opsScMonths.length}">` +
+      '<div class="empty">No operation scorecard data matches the selected filters.</div></td></tr>';
+    return;
+  }
+
+  body.innerHTML = data.map(r => {
+    const cells = opsScMonths.map((m, idx) => {
+      const v = r.values[m];
+      if (v === null || v === undefined) return '<td style="color:#aaa">-</td>';
+      /* month-on-month delta vs the previous month that has a value */
+      let delta = '';
+      for (let j = idx - 1; j >= 0; j--) {
+        const pv = r.values[opsScMonths[j]];
+        if (pv !== null && pv !== undefined) {
+          const d     = v - pv;
+          const color = d >= 0 ? '#2a5c14' : '#a32d2d';
+          const arrow = d >= 0 ? '&#9650;' : '&#9660;';
+          delta = ` <span style="color:${color};font-size:11px">${arrow}${Math.abs(d).toFixed(1)}</span>`;
+          break;
+        }
+      }
+      return `<td style="font-weight:600;color:${opsScColor(v)}">${v.toFixed(1)}%${delta}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="font-weight:600">${r.outlet}</td>
+      <td style="color:#6b6b68">${r.cm || '-'}</td>
+      <td style="color:#6b6b68">${r.rm || '-'}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+}
+
+function renderOpsScCharts(data) {
+  const cmEl = document.getElementById('opsScCmChart');
+  const rmEl = document.getElementById('opsScRmChart');
+  if (!cmEl || !rmEl) return;
+
+  const sel   = document.getElementById('opsScMonthFilter');
+  const pick  = sel && sel.value !== 'latest' && opsScMonths.includes(sel.value)
+    ? sel.value : opsScMonths[opsScMonths.length - 1];
+
+  const cmLbl = document.getElementById('opsScCmChartLabel');
+  if (cmLbl) cmLbl.innerHTML = 'Avg scorecard % by Cluster (CM) &mdash; ' + (pick || 'latest month');
+  const rmLbl = document.getElementById('opsScRmChartLabel');
+  if (rmLbl) rmLbl.innerHTML = 'Avg scorecard % by RM &mdash; ' + (pick || 'latest month');
+
+  function groupAvg(keyFn) {
+    const map = {};
+    data.forEach(r => {
+      const v = r.values[pick];
+      if (v === null || v === undefined) return;
+      const key = keyFn(r);
+      if (!map[key]) map[key] = { sum: 0, n: 0 };
+      map[key].sum += v;
+      map[key].n   += 1;
+    });
+    const labels = Object.keys(map).sort((a, b) => map[b].sum / map[b].n - map[a].sum / map[a].n);
+    const vals   = labels.map(k => parseFloat((map[k].sum / map[k].n).toFixed(2)));
+    return { labels, vals };
+  }
+
+  function barChart(el, existing, group) {
+    if (existing) existing.destroy();
+    return new Chart(el, {
+      type: 'bar',
+      data: {
+        labels: group.labels,
+        datasets: [{
+          label: 'Avg scorecard %',
+          data: group.vals,
+          backgroundColor: group.vals.map(opsScColor),
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+          y: { ticks: { font: { size: 11 } } },
+        },
+      },
+    });
+  }
+
+  opsScCmChartObj = barChart(cmEl, opsScCmChartObj, groupAvg(r => r.cm && r.cm !== '-' ? r.cm : 'Unassigned'));
+  opsScRmChartObj = barChart(rmEl, opsScRmChartObj, groupAvg(r => r.rm && r.rm !== '-' ? r.rm : 'Unassigned'));
+}
+
+function exportOpsScCSV() {
+  const data = getFilteredOpsSc();
+  if (!data.length) return;
+  const headers = ['Store Name', 'Cluster (CM)', 'RM Name', ...opsScMonths];
+  const rows = data.map(r => [
+    r.outlet, r.cm || '-', r.rm || '-',
+    ...opsScMonths.map(m => {
+      const v = r.values[m];
+      return (v === null || v === undefined) ? '-' : v.toFixed(1) + '%';
+    }),
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_operation_scorecard_' + date + '.csv';
   a.click();
 }
