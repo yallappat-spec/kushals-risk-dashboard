@@ -2650,6 +2650,15 @@ function applyExcelFilters() {
   renderExcelCharts(data);
 }
 
+function excelScColor(v) {
+  return v >= 90 ? '#2a5c14' : v >= 80 ? '#854f0b' : '#a32d2d';
+}
+
+function getScoreColor(value) {
+  if (value === null || value === undefined) return '';
+  return `background:${excelScColor(value)}22;color:${excelScColor(value)};font-weight:600;`;
+}
+
 function renderExcelTable(data) {
   const headRow = document.getElementById('excelHeadRow');
   const body = document.getElementById('excelBody');
@@ -2673,7 +2682,8 @@ function renderExcelTable(data) {
       ...months.map(m => {
         const v = r.values[m];
         const html = (v === null || v === undefined) ? '-' : v.toFixed(1) + '%';
-        return `<td>${html}</td>`;
+        const style = getScoreColor(v);
+        return `<td style="${style}">${html}</td>`;
       }),
     ];
     return `<tr>${cells.join('')}</tr>`;
