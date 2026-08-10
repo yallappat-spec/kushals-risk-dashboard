@@ -14,12 +14,16 @@ let enrollData    = [];
 let enrollMonths  = [];
 let opsScData     = [];
 let opsScMonths   = [];
+let excelData     = [];
+let excelMonths   = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
 let pChart = null;
 let rmChart = null;
 let clauseChart = null;
+let excelCmChart = null;
+let excelRmChart = null;
 let cardFilter    = null; // 'high' | 'medium' | 'low' | 'shrinkage' | 'fraud' | 'ops' | null
 
 /* Default Google Sheet — always loaded on page open */
@@ -384,6 +388,7 @@ async function loadFromGoogleSheet() {
     loadAuditSheet();
     loadEnrollSheet();
     loadOpsScSheet();
+    loadExcelSheet();
   } catch (err) {
     showSheetStatus('&#10007; ' + err.message, 'err');
   } finally {
@@ -876,6 +881,7 @@ function switchPageTab(tab) {
   document.getElementById('pageAudit').style.display     = tab === 'audit'     ? '' : 'none';
   document.getElementById('pageEnroll').style.display    = tab === 'enroll'    ? '' : 'none';
   document.getElementById('pageOpsSc').style.display     = tab === 'opssc'     ? '' : 'none';
+  document.getElementById('pageExcel').style.display     = tab === 'excel'     ? '' : 'none';
   document.getElementById('ptab-risk').classList.toggle('active',      tab === 'risk');
   document.getElementById('ptab-issues').classList.toggle('active',    tab === 'issues');
   document.getElementById('ptab-shrinkage').classList.toggle('active', tab === 'shrinkage');
@@ -883,6 +889,7 @@ function switchPageTab(tab) {
   document.getElementById('ptab-audit').classList.toggle('active',     tab === 'audit');
   document.getElementById('ptab-enroll').classList.toggle('active',    tab === 'enroll');
   document.getElementById('ptab-opssc').classList.toggle('active',     tab === 'opssc');
+  document.getElementById('ptab-excel').classList.toggle('active',     tab === 'excel');
   if (tab === 'issues'    && issuesData.length    === 0) loadIssuesSheet();
   if (tab === 'shrinkage' && shrinkageData.length === 0) loadShrinkageSheet();
   if (tab === 'shortage'  && shortageData.length  === 0) loadShortageSheet();
@@ -894,6 +901,10 @@ function switchPageTab(tab) {
   if (tab === 'opssc') {
     if (opsScData.length === 0) loadOpsScSheet();
     else applyOpsScFilters(); /* re-render charts now that the tab is visible */
+  }
+  if (tab === 'excel') {
+    if (excelData.length === 0) loadExcelSheet();
+    else applyExcelFilters(); /* re-render charts now that the tab is visible */
   }
 }
 
@@ -2468,5 +2479,284 @@ function exportOpsScCSV() {
   const date = new Date().toISOString().slice(0, 10);
   a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'kushals_operation_scorecard_' + date + '.csv';
+  a.click();
+}
+
+/* ============================================================
+   CUSTOMER EXCELLENCE SCORECARD
+   ============================================================ */
+const EXCEL_SHEET_NAMES = [
+  'Customer Excellence Scorecard', 'Customer excellence scorecard',
+  'customer excellence scorecard', 'CUSTOMER EXCELLENCE SCORECARD',
+  'Excellence Scorecard', 'Excellence scorecard',
+];
+
+function showExcelStatus(msg, type) {
+  const el = document.getElementById('excelStatus');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.className = 'upload-status' + (type ? ' ' + type : '');
+}
+
+async function loadExcelSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) {
+    showExcelStatus('Customer excellence scorecard data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
+    return;
+  }
+  showExcelStatus('Loading customer excellence scorecard data…', '');
+
+  for (const name of EXCEL_SHEET_NAMES) {
+    const csvUrl = toEnrollCSVUrl(raw, name);
+    if (!csvUrl) return;
+    try {
+      const res = await fetch(csvUrl);
+      if (!res.ok) continue;
+      const text = await res.text();
+      const parsed = parseExcelCSV(text);
+      if (!parsed.rows.length) continue;
+
+      const storeMap = {};
+      activeStores.forEach(s => { storeMap[s.store] = { cm: s.cm || '-', rm: s.rm || '-' }; });
+      excelMonths = parsed.months;
+      excelData = parsed.rows.map(r => ({
+        ...r,
+        cm: (r.cm && r.cm !== '-') ? r.cm : (storeMap[r.outlet]?.cm || '-'),
+        rm: (r.rm && r.rm !== '-') ? r.rm : (storeMap[r.outlet]?.rm || '-'),
+      }));
+      rebuildExcelFilters();
+      applyExcelFilters();
+      showExcelStatus('', '');
+      return;
+    } catch (_) { /* try the next candidate tab name */ }
+  }
+  showExcelStatus('&#10007; Could not find a "Customer Excellence Scorecard" tab in the Google Sheet. ' +
+    'Please check the tab name (tried: ' + EXCEL_SHEET_NAMES.slice(0, 3).join(', ') + '…).', 'err');
+}
+
+function excelScNum(raw) {
+  const s = (raw || '').toString().trim();
+  if (!s || s === '-') return null;
+  const v = parseFloat(s.replace(/[%,\s]/g, ''));
+  if (isNaN(v)) return null;
+  return (!s.includes('%') && v > 0 && v <= 1) ? v * 100 : v;
+}
+
+function parseExcelCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return { rows: [], months: [] };
+
+  const rawHdrs = allRows[0];
+  const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
+  if (iOutlet === -1) iOutlet = 0;
+  const iCM    = col('cmname', 'cm', 'clustermanager', 'cluster');
+  const iRM    = col('rmname', 'rm', 'regionalmanager');
+  const iMonth = col('month', 'period', 'monthname');
+  const iVal   = col('score', 'scorepct', 'scorecard', 'excellencescore', 'excellencescorecard',
+                     'customerexcellence', 'excellence', 'percentage', 'pct', 'value');
+
+  /* LONG layout: one row per store per month */
+  if (iMonth !== -1 && iVal !== -1) {
+    const map = {}, monthsSeen = {};
+    for (let i = 1; i < allRows.length; i++) {
+      const c = allRows[i];
+      const outlet = (c[iOutlet] || '').trim();
+      const month  = (c[iMonth]  || '').trim();
+      if (!outlet || !month) continue;
+      const v = excelScNum(c[iVal]);
+      monthsSeen[month] = true;
+      if (!map[outlet]) {
+        map[outlet] = {
+          outlet,
+          cm: iCM !== -1 ? (c[iCM] || '-') : '-',
+          rm: iRM !== -1 ? (c[iRM] || '-') : '-',
+          values: {},
+        };
+      }
+      if (v !== null || map[outlet].values[month] === undefined) map[outlet].values[month] = v;
+    }
+    const months = Object.keys(monthsSeen).sort((a, b) => enrollMonthKey(a) - enrollMonthKey(b));
+    return { rows: Object.values(map), months };
+  }
+
+  /* WIDE layout: month columns across the header */
+  const monthCols = [];
+  rawHdrs.forEach((h, i) => {
+    if (i === iOutlet || i === iCM || i === iRM) return;
+    if (enrollMonthKey(h) > 0) monthCols.push({ i, label: h.trim() });
+  });
+  if (!monthCols.length) return { rows: [], months: [] };
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    const outlet = (c[iOutlet] || '').trim();
+    if (!outlet) continue;
+    const values = {};
+    monthCols.forEach(mc => { values[mc.label] = excelScNum(c[mc.i]); });
+    rows.push({
+      outlet,
+      cm: iCM !== -1 ? (c[iCM] || '-') : '-',
+      rm: iRM !== -1 ? (c[iRM] || '-') : '-',
+      values,
+    });
+  }
+  return { rows, months: monthCols.map(mc => mc.label) };
+}
+
+function rebuildExcelFilters() {
+  function rebuild(id, values) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">All</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  rebuild('excelRmFilter',     [...new Set(excelData.map(r => r.rm).filter(v => v && v !== '-'))].sort());
+  rebuild('excelCmFilter',     [...new Set(excelData.map(r => r.cm).filter(v => v && v !== '-'))].sort());
+  rebuild('excelOutletFilter', [...new Set(excelData.map(r => r.outlet))].sort());
+
+  const monthSel = document.getElementById('excelMonthFilter');
+  if (monthSel) {
+    const cur = monthSel.value;
+    monthSel.innerHTML = '<option value="latest">Latest</option>' +
+      [...excelMonths].reverse().map(m => `<option value="${m}">${m}</option>`).join('');
+    if (excelMonths.includes(cur)) monthSel.value = cur;
+  }
+}
+
+function getFilteredExcel() {
+  const rm     = document.getElementById('excelRmFilter').value;
+  const cm     = document.getElementById('excelCmFilter').value;
+  const outlet = document.getElementById('excelOutletFilter').value;
+  return excelData.filter(r =>
+    (rm     === 'all' || r.rm     === rm)     &&
+    (cm     === 'all' || r.cm     === cm)     &&
+    (outlet === 'all' || r.outlet === outlet)
+  ).sort((a, b) => a.outlet.localeCompare(b.outlet));
+}
+
+function applyExcelFilters() {
+  const data = getFilteredExcel();
+  renderExcelTable(data);
+  renderExcelCharts(data);
+}
+
+function renderExcelTable(data) {
+  const headRow = document.getElementById('excelHeadRow');
+  const body = document.getElementById('excelBody');
+  if (!headRow || !body) return;
+
+  const month = document.getElementById('excelMonthFilter').value;
+  const displayMonth = month === 'latest' ? (excelMonths[excelMonths.length - 1] || '') : month;
+  const months = month === 'latest' ? excelMonths : [month];
+
+  /* Build header */
+  headRow.innerHTML = '<th>Store Name</th><th>Cluster (CM)</th><th>RM Name</th>' +
+    months.map(m => `<th>${m}</th>`).join('') +
+    (month === 'latest' ? '' : '');
+
+  /* Build rows */
+  body.innerHTML = data.map(r => {
+    const cells = [
+      `<td>${r.outlet}</td>`,
+      `<td>${r.cm || '-'}</td>`,
+      `<td>${r.rm || '-'}</td>`,
+      ...months.map(m => {
+        const v = r.values[m];
+        const html = (v === null || v === undefined) ? '-' : v.toFixed(1) + '%';
+        return `<td>${html}</td>`;
+      }),
+    ];
+    return `<tr>${cells.join('')}</tr>`;
+  }).join('');
+
+  document.getElementById('excelCount').textContent = data.length + ' outlet' + (data.length !== 1 ? 's' : '');
+}
+
+function renderExcelCharts(data) {
+  const month = document.getElementById('excelMonthFilter').value;
+  const displayMonth = month === 'latest' ? (excelMonths[excelMonths.length - 1] || 'latest') : month;
+
+  document.getElementById('excelCmChartLabel').textContent = `Avg scorecard % by Cluster (CM) — ${displayMonth}`;
+  document.getElementById('excelRmChartLabel').textContent = `Avg scorecard % by RM — ${displayMonth}`;
+
+  const cmEl = document.getElementById('excelCmChart');
+  const rmEl = document.getElementById('excelRmChart');
+  if (!cmEl || !rmEl) return;
+
+  function barChart(el, chartObj, grouping) {
+    const groups = {};
+    data.forEach(r => {
+      const key = grouping(r);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+
+    const labels = Object.keys(groups).sort();
+    const vals = labels.map(label => {
+      const rows = groups[label];
+      let total = 0, count = 0;
+      rows.forEach(r => {
+        const v = month === 'latest' ? r.values[excelMonths[excelMonths.length - 1]] : r.values[month];
+        if (v !== null && v !== undefined) { total += v; count++; }
+      });
+      return count ? total / count : 0;
+    });
+
+    if (chartObj) chartObj.destroy();
+    chartObj = new Chart(el, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Avg Scorecard %',
+          data: vals,
+          backgroundColor: '#7cb342',
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+          y: { ticks: { font: { size: 11 } } },
+        },
+      },
+    });
+    return chartObj;
+  }
+
+  excelCmChart = barChart(cmEl, excelCmChart, r => r.cm && r.cm !== '-' ? r.cm : 'Unassigned');
+  excelRmChart = barChart(rmEl, excelRmChart, r => r.rm && r.rm !== '-' ? r.rm : 'Unassigned');
+}
+
+function exportExcelCSV() {
+  const data = getFilteredExcel();
+  if (!data.length) return;
+  const headers = ['Store Name', 'Cluster (CM)', 'RM Name', ...excelMonths];
+  const rows = data.map(r => [
+    r.outlet, r.cm || '-', r.rm || '-',
+    ...excelMonths.map(m => {
+      const v = r.values[m];
+      return (v === null || v === undefined) ? '-' : v.toFixed(1) + '%';
+    }),
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'kushals_customer_excellence_scorecard_' + date + '.csv';
   a.click();
 }
