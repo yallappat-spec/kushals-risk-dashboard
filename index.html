@@ -492,6 +492,13 @@
       <select id="excelOutletFilter" onchange="applyExcelFilters()"><option value="all">All</option></select>
       <label>Chart month:</label>
       <select id="excelMonthFilter"  onchange="applyExcelFilters()"><option value="latest">Latest</option></select>
+      <label>Score Range:</label>
+      <select id="excelScoreFilter"  onchange="applyExcelFilters()">
+        <option value="all">All</option>
+        <option value="green">🟢 Green (≥ 90%)</option>
+        <option value="yellow">🟡 Yellow (80-89%)</option>
+        <option value="red">🔴 Red (< 80%)</option>
+      </select>
     </div>
 
     <div class="charts-row">
