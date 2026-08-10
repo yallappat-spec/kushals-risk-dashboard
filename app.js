@@ -2633,15 +2633,34 @@ function rebuildExcelFilters() {
   }
 }
 
+function getScoreRange(value) {
+  if (value === null || value === undefined) return null;
+  if (value >= 90) return 'green';
+  if (value >= 80) return 'yellow';
+  return 'red';
+}
+
 function getFilteredExcel() {
-  const rm     = document.getElementById('excelRmFilter').value;
-  const cm     = document.getElementById('excelCmFilter').value;
-  const outlet = document.getElementById('excelOutletFilter').value;
-  return excelData.filter(r =>
-    (rm     === 'all' || r.rm     === rm)     &&
-    (cm     === 'all' || r.cm     === cm)     &&
-    (outlet === 'all' || r.outlet === outlet)
-  ).sort((a, b) => a.outlet.localeCompare(b.outlet));
+  const rm        = document.getElementById('excelRmFilter').value;
+  const cm        = document.getElementById('excelCmFilter').value;
+  const outlet    = document.getElementById('excelOutletFilter').value;
+  const scoreFilter = document.getElementById('excelScoreFilter').value;
+  const month = document.getElementById('excelMonthFilter').value;
+  const targetMonth = month === 'latest' ? excelMonths[excelMonths.length - 1] : month;
+
+  return excelData.filter(r => {
+    if (rm !== 'all' && r.rm !== rm) return false;
+    if (cm !== 'all' && r.cm !== cm) return false;
+    if (outlet !== 'all' && r.outlet !== outlet) return false;
+
+    if (scoreFilter !== 'all') {
+      const v = r.values[targetMonth];
+      const range = getScoreRange(v);
+      if (range !== scoreFilter) return false;
+    }
+
+    return true;
+  }).sort((a, b) => a.outlet.localeCompare(b.outlet));
 }
 
 function applyExcelFilters() {
