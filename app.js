@@ -2494,12 +2494,14 @@ const EXCEL_SHEET_NAMES = [
 ];
 
 const EXCEL_ISSUES_SHEET_NAMES = [
+  'Customer Handling Issues', 'Customer handling issues',
   'Customer Handling Issue', 'Customer handling issue',
   'customer handling issue', 'CUSTOMER HANDLING ISSUE',
   'Handling Issue', 'Customer Issues', 'Issues',
 ];
 
 const EXCEL_AUDIT_SHEET_NAMES = [
+  'Customer Handling Issues', 'Customer handling issues',
   'Audit Clause', 'Audit clause', 'audit clause',
   'AUDIT CLAUSE', 'Audit', 'Audit Clauses', 'Audit clauses',
 ];
@@ -2585,20 +2587,20 @@ function parseExcelIssuesCSV(text) {
     if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
       iOutlet = i;
     }
-    // Match issue column
-    if (h.includes('issue') || h.includes('observation') || h.includes('description') || h.includes('problem')) {
+    // Match issue column (including audit clause as issue)
+    if (h.includes('issue') || h.includes('observation') || h.includes('description') || h.includes('problem') || h.includes('audit') || h.includes('clause')) {
       iIssue = i;
     }
-    // Match category column
-    if (h.includes('category') || h.includes('type') || h.includes('issuetype')) {
+    // Match category column (including stage)
+    if (h.includes('category') || h.includes('type') || h.includes('issuetype') || h.includes('stage')) {
       iCategory = i;
     }
     // Match date column
     if (h.includes('date') || h.includes('dateidentified')) {
       iDate = i;
     }
-    // Match status column
-    if (h.includes('status') || h.includes('issuestatus')) {
+    // Match status column (including score)
+    if (h.includes('status') || h.includes('issuestatus') || h.includes('score')) {
       iStatus = i;
     }
   }
