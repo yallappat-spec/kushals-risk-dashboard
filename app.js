@@ -2555,20 +2555,32 @@ async function loadExcelIssuesSheet() {
   const raw = document.getElementById('sheetUrl').value.trim();
   if (!raw) return;
 
+  console.log('loadExcelIssuesSheet - Trying sheet names:', EXCEL_ISSUES_SHEET_NAMES);
+
   for (const name of EXCEL_ISSUES_SHEET_NAMES) {
     const csvUrl = toEnrollCSVUrl(raw, name);
     if (!csvUrl) return;
+    console.log(`loadExcelIssuesSheet - Trying "${name}": ${csvUrl.substring(0, 100)}...`);
     try {
       const res = await fetch(csvUrl);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.log(`loadExcelIssuesSheet - "${name}" failed with status ${res.status}`);
+        continue;
+      }
       const text = await res.text();
+      console.log(`loadExcelIssuesSheet - "${name}" loaded, CSV length: ${text.length}, first 200 chars:`, text.substring(0, 200));
       const parsed = parseExcelIssuesCSV(text);
+      console.log(`loadExcelIssuesSheet - "${name}" parsed, got ${parsed.length} rows`);
       if (!parsed.length) continue;
 
       excelIssuesData = parsed;
+      console.log('loadExcelIssuesSheet - Data loaded successfully:', excelIssuesData);
       return;
-    } catch (_) { /* try the next candidate tab name */ }
+    } catch (err) {
+      console.log(`loadExcelIssuesSheet - "${name}" error:`, err.message);
+    }
   }
+  console.log('loadExcelIssuesSheet - No sheet found');
 }
 
 function parseExcelIssuesCSV(text) {
