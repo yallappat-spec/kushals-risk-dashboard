@@ -26,6 +26,10 @@ let rmChart = null;
 let clauseChart = null;
 let excelCmChart = null;
 let excelRmChart = null;
+let auditStoresChart = null;
+let auditCategoryChart = null;
+let auditScoreChart = null;
+let auditClausesChart = null;
 let cardFilter    = null; // 'high' | 'medium' | 'low' | 'shrinkage' | 'fraud' | 'ops' | null
 
 /* Default Google Sheet — always loaded on page open */
@@ -3085,6 +3089,162 @@ function renderExcelCharts(data) {
 
   excelCmChart = barChart(cmEl, excelCmChart, r => r.cm && r.cm !== '-' ? r.cm : 'Unassigned');
   excelRmChart = barChart(rmEl, excelRmChart, r => r.rm && r.rm !== '-' ? r.rm : 'Unassigned');
+
+  // Render audit clause analysis charts
+  renderAuditCharts();
+}
+
+function renderAuditCharts() {
+  if (!excelIssuesData || !excelIssuesData.length) return;
+
+  // Analyze issues by store
+  const storeCount = {};
+  excelIssuesData.forEach(issue => {
+    storeCount[issue.outlet] = (storeCount[issue.outlet] || 0) + 1;
+  });
+  const topStores = Object.entries(storeCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  // Analyze issues by category
+  const categoryCount = {};
+  excelIssuesData.forEach(issue => {
+    const cat = issue.category || 'Unknown';
+    categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+  });
+
+  // Analyze issues by score
+  const scoreCount = {};
+  excelIssuesData.forEach(issue => {
+    const score = issue.status || 'Unknown';
+    scoreCount[score] = (scoreCount[score] || 0) + 1;
+  });
+
+  // Analyze top audit clauses
+  const clauseCount = {};
+  excelIssuesData.forEach(issue => {
+    const clause = issue.issue || 'Unknown';
+    clauseCount[clause] = (clauseCount[clause] || 0) + 1;
+  });
+  const topClauses = Object.entries(clauseCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
+  // Render top stores chart
+  const storesEl = document.getElementById('auditStoresChart');
+  if (storesEl) {
+    if (auditStoresChart) auditStoresChart.destroy();
+    auditStoresChart = new Chart(storesEl, {
+      type: 'bar',
+      data: {
+        labels: topStores.map(s => s[0]),
+        datasets: [{
+          label: 'Number of Issues',
+          data: topStores.map(s => s[1]),
+          backgroundColor: '#d32f2f',
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+          y: { ticks: { font: { size: 11 } } },
+        },
+      },
+    });
+  }
+
+  // Render category chart
+  const categoryEl = document.getElementById('auditCategoryChart');
+  if (categoryEl) {
+    if (auditCategoryChart) auditCategoryChart.destroy();
+    const categoryLabels = Object.keys(categoryCount);
+    const categoryColors = ['#2a5c14', '#854f0b', '#666', '#a32d2d'];
+    auditCategoryChart = new Chart(categoryEl, {
+      type: 'doughnut',
+      data: {
+        labels: categoryLabels,
+        datasets: [{
+          data: categoryLabels.map(c => categoryCount[c]),
+          backgroundColor: categoryColors.slice(0, categoryLabels.length),
+          borderWidth: 1,
+          borderColor: '#fff',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } },
+        },
+      },
+    });
+  }
+
+  // Render score/severity chart
+  const scoreEl = document.getElementById('auditScoreChart');
+  if (scoreEl) {
+    if (auditScoreChart) auditScoreChart.destroy();
+    const scoreLabels = Object.keys(scoreCount);
+    const scoreColors = scoreLabels.map(s =>
+      s.toLowerCase().includes('average') ? '#854f0b' :
+      s.toLowerCase().includes('not following') ? '#a32d2d' : '#2a5c14'
+    );
+    auditScoreChart = new Chart(scoreEl, {
+      type: 'pie',
+      data: {
+        labels: scoreLabels,
+        datasets: [{
+          data: scoreLabels.map(s => scoreCount[s]),
+          backgroundColor: scoreColors,
+          borderWidth: 1,
+          borderColor: '#fff',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } },
+        },
+      },
+    });
+  }
+
+  // Render top clauses chart
+  const clausesEl = document.getElementById('auditClausesChart');
+  if (clausesEl) {
+    if (auditClausesChart) auditClausesChart.destroy();
+    const clauseLabels = topClauses.map(c =>
+      c[0].length > 40 ? c[0].substring(0, 37) + '...' : c[0]
+    );
+    auditClausesChart = new Chart(clausesEl, {
+      type: 'bar',
+      data: {
+        labels: clauseLabels,
+        datasets: [{
+          label: 'Frequency',
+          data: topClauses.map(c => c[1]),
+          backgroundColor: '#1565c0',
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+          y: { ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+  }
 }
 
 function exportExcelCSV() {
