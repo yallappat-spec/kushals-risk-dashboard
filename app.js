@@ -2581,9 +2581,11 @@ async function loadExcelIssuesSheet() {
       if (!parsed.length) continue;
 
       excelIssuesData = parsed;
-      console.log('loadExcelIssuesSheet - Data loaded successfully:', excelIssuesData);
       if (parsed.length > 0) {
-        alert(`Loaded ${parsed.length} customer handling issues. First record: ${JSON.stringify(parsed[0])}`);
+        const firstRecord = parsed[0];
+        const debugMsg = `✓ Loaded ${parsed.length} handling issues. Example: Outlet="${firstRecord.outlet}" Issue="${firstRecord.issue}" Category="${firstRecord.category}" Status="${firstRecord.status}"`;
+        showExcelStatus(debugMsg, 'ok');
+        console.log('loadExcelIssuesSheet - Data:', parsed);
       }
       return;
     } catch (err) {
@@ -2676,6 +2678,12 @@ async function loadExcelAuditSheet() {
       if (!parsed.length) continue;
 
       excelAuditData = parsed;
+      if (parsed.length > 0) {
+        const firstRecord = parsed[0];
+        const debugMsg = `✓ Loaded ${parsed.length} audit clauses. Example: Outlet="${firstRecord.outlet}" Clause="${firstRecord.clause}" Score="${firstRecord.score}"`;
+        showExcelStatus(debugMsg, 'ok');
+        console.log('loadExcelAuditSheet - Data:', parsed);
+      }
       return;
     } catch (_) { /* try the next candidate tab name */ }
   }
