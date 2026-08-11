@@ -2955,29 +2955,31 @@ function toggleExcelIssues(storeName, el) {
   const auditsHtml = audits.length ?
     `<div>
       <div style="font-weight:600;margin-bottom:8px;color:#2a5c14;padding:8px;background:#d4edda;border-radius:3px">✅ Audit Clauses (${audits.length})</div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead>
-          <tr style="background:#f5f5f5;border-bottom:1px solid #ddd">
-            <th style="padding:8px;text-align:left;border-right:1px solid #ddd"><strong>Audit Clause</strong></th>
-            <th style="padding:8px;text-align:center;width:80px;border-right:1px solid #ddd"><strong>Score</strong></th>
-            <th style="padding:8px;text-align:center;width:80px;border-right:1px solid #ddd"><strong>Month</strong></th>
-            <th style="padding:8px;text-align:left"><strong>Remarks</strong></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${audits.map(audit => `
-            <tr style="border-bottom:1px solid #eee">
-              <td style="padding:8px;border-right:1px solid #eee">${audit.clause || '-'}</td>
-              <td style="padding:8px;text-align:center;border-right:1px solid #eee;font-weight:600;color:${
-                audit.score.toLowerCase().includes('average') ? '#854f0b' :
-                audit.score.toLowerCase().includes('not following') ? '#a32d2d' : '#666'
-              }">${audit.score || '-'}</td>
-              <td style="padding:8px;text-align:center;border-right:1px solid #eee;font-size:11px;color:#666">${audit.date || '-'}</td>
-              <td style="padding:8px">${audit.remarks || '-'}</td>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
+          <thead>
+            <tr style="background:#f5f5f5;border-bottom:1px solid #ddd">
+              <th style="padding:6px;text-align:left;border-right:1px solid #ddd;width:45%"><strong>Audit Clause</strong></th>
+              <th style="padding:6px;text-align:center;border-right:1px solid #ddd;width:12%"><strong>Score</strong></th>
+              <th style="padding:6px;text-align:center;border-right:1px solid #ddd;width:12%"><strong>Month</strong></th>
+              <th style="padding:6px;text-align:left;width:31%"><strong>Remarks</strong></th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${audits.map(audit => `
+              <tr style="border-bottom:1px solid #eee">
+                <td style="padding:6px;border-right:1px solid #eee">${audit.clause || '-'}</td>
+                <td style="padding:6px;text-align:center;border-right:1px solid #eee;font-weight:600;color:${
+                  audit.score.toLowerCase().includes('average') ? '#854f0b' :
+                  audit.score.toLowerCase().includes('not following') ? '#a32d2d' : '#666'
+                }">${audit.score || '-'}</td>
+                <td style="padding:6px;text-align:center;border-right:1px solid #eee;font-size:10px;color:#666">${audit.date || '-'}</td>
+                <td style="padding:6px">${audit.remarks || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
     </div>` :
     '<div style="padding:12px;background:#f9f9f7;color:#999;font-style:italic">No audit clauses recorded</div>';
 
