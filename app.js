@@ -2494,12 +2494,14 @@ const EXCEL_SHEET_NAMES = [
 ];
 
 const EXCEL_ISSUES_SHEET_NAMES = [
+  'Customer Handling Issues', 'Customer handling issues',
   'Customer Handling Issue', 'Customer handling issue',
   'customer handling issue', 'CUSTOMER HANDLING ISSUE',
   'Handling Issue', 'Customer Issues', 'Issues',
 ];
 
 const EXCEL_AUDIT_SHEET_NAMES = [
+  'Customer Handling Issues', 'Customer handling issues',
   'Audit Clause', 'Audit clause', 'audit clause',
   'AUDIT CLAUSE', 'Audit', 'Audit Clauses', 'Audit clauses',
 ];
@@ -2512,14 +2514,18 @@ function showExcelStatus(msg, type) {
 }
 
 async function loadExcelSheet() {
+  console.log('loadExcelSheet() called');
   const raw = document.getElementById('sheetUrl').value.trim();
   if (!raw) {
+    console.log('loadExcelSheet - No sheet URL');
     showExcelStatus('Customer excellence scorecard data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
     return;
   }
+  console.log('loadExcelSheet - Sheet URL found:', raw.substring(0, 60));
   showExcelStatus('Loading customer excellence scorecard data…', '');
 
   for (const name of EXCEL_SHEET_NAMES) {
+    console.log(`loadExcelSheet - Trying sheet: "${name}"`);
     const csvUrl = toEnrollCSVUrl(raw, name);
     if (!csvUrl) return;
     try {
@@ -2553,20 +2559,40 @@ async function loadExcelIssuesSheet() {
   const raw = document.getElementById('sheetUrl').value.trim();
   if (!raw) return;
 
+  console.log('loadExcelIssuesSheet - Trying sheet names:', EXCEL_ISSUES_SHEET_NAMES);
+
   for (const name of EXCEL_ISSUES_SHEET_NAMES) {
     const csvUrl = toEnrollCSVUrl(raw, name);
     if (!csvUrl) return;
+    console.log(`loadExcelIssuesSheet - Trying "${name}": ${csvUrl.substring(0, 100)}...`);
     try {
       const res = await fetch(csvUrl);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.log(`loadExcelIssuesSheet - "${name}" failed with status ${res.status}`);
+        continue;
+      }
       const text = await res.text();
+      console.log(`loadExcelIssuesSheet - "${name}" loaded, CSV length: ${text.length}`);
+      const lines = text.split('\n');
+      console.log(`loadExcelIssuesSheet - CSV headers (row 0):`, lines[0]);
+      if (lines[1]) console.log(`loadExcelIssuesSheet - First data row (row 1):`, lines[1]);
       const parsed = parseExcelIssuesCSV(text);
+      console.log(`loadExcelIssuesSheet - "${name}" parsed, got ${parsed.length} rows`);
       if (!parsed.length) continue;
 
       excelIssuesData = parsed;
+      if (parsed.length > 0) {
+        const firstRecord = parsed[0];
+        const debugMsg = `✓ Loaded ${parsed.length} handling issues. Example: Outlet="${firstRecord.outlet}" Issue="${firstRecord.issue}" Category="${firstRecord.category}" Status="${firstRecord.status}"`;
+        showExcelStatus(debugMsg, 'ok');
+        console.log('loadExcelIssuesSheet - Data:', parsed);
+      }
       return;
-    } catch (_) { /* try the next candidate tab name */ }
+    } catch (err) {
+      console.log(`loadExcelIssuesSheet - "${name}" error:`, err.message);
+    }
   }
+  console.log('loadExcelIssuesSheet - No sheet found');
 }
 
 function parseExcelIssuesCSV(text) {
@@ -2576,33 +2602,79 @@ function parseExcelIssuesCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
-  // Find columns by substring match (case-insensitive)
+  // Find columns: try exact column positions first, then keyword matching
   let iOutlet = -1, iIssue = -1, iCategory = -1, iDate = -1, iStatus = -1;
 
+  // First, try to find by exact position (Google Sheets exports columns in order)
+  // Outlet Name is typically at index 2 (after Month, Year)
   for (let i = 0; i < hdrs.length; i++) {
     const h = hdrs[i];
-    if (h.includes('outlet')) iOutlet = i;
-    if (h.includes('issue') || h.includes('observation') || h.includes('description')) iIssue = i;
-    if (h.includes('category') || h.includes('type')) iCategory = i;
-    if (h.includes('date')) iDate = i;
-    if (h.includes('status')) iStatus = i;
+    // Match outlet name (exact or keyword)
+    if (h === 'outlet name' || (h.includes('outlet') && !h.includes('month'))) {
+      iOutlet = i;
+      break;
+    }
   }
+
+  // If outlet not found by exact match, search by keyword
+  if (iOutlet === -1) {
+    for (let i = 0; i < hdrs.length; i++) {
+      const h = hdrs[i];
+      if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+        iOutlet = i;
+        break;
+      }
+    }
+  }
+
+  // Find other columns after outlet
+  for (let i = 0; i < hdrs.length; i++) {
+    const h = hdrs[i];
+    // Match issue/audit clause column
+    if (h === 'audit clause' || h === 'audit' || h.includes('audit') || h.includes('clause') || h.includes('issue')) {
+      if (iIssue === -1) iIssue = i;
+    }
+    // Match category/stage column
+    if (h === 'stage' || h.includes('category') || h.includes('type')) {
+      if (iCategory === -1) iCategory = i;
+    }
+    // Match date column
+    if (h.includes('date')) {
+      if (iDate === -1) iDate = i;
+    }
+    // Match score/status column
+    if (h === 'score' || h.includes('score') || h.includes('status')) {
+      if (iStatus === -1) iStatus = i;
+    }
+  }
+
+  console.log('parseExcelIssuesCSV - Column indices:', { iOutlet, iIssue, iCategory, iDate, iStatus });
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
-    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
+    // Get outlet name
+    const outlet = iOutlet !== -1 && iOutlet < c.length ? (c[iOutlet] || '').trim() : '';
     if (!outlet) continue;
+
+    // Get data from found columns, or empty string if column not found
+    const issue = iIssue !== -1 && iIssue < c.length ? (c[iIssue] || '').trim() : '';
+    const category = iCategory !== -1 && iCategory < c.length ? (c[iCategory] || '').trim() : '';
+    const date = iDate !== -1 && iDate < c.length ? (c[iDate] || '').trim() : '';
+    const status = iStatus !== -1 && iStatus < c.length ? (c[iStatus] || '').trim() : '';
+
+    console.log(`parseExcelIssuesCSV row ${i}:`, { outlet, issue, category, date, status });
 
     rows.push({
       outlet,
-      issue: iIssue !== -1 ? (c[iIssue] || '').trim() : '',
-      category: iCategory !== -1 ? (c[iCategory] || '').trim() : '',
-      date: iDate !== -1 ? (c[iDate] || '').trim() : '',
-      status: iStatus !== -1 ? (c[iStatus] || '').trim() : '',
+      issue,
+      category,
+      date,
+      status,
     });
   }
 
+  console.log('parseExcelIssuesCSV - Total rows parsed:', rows.length);
   return rows;
 }
 
@@ -2621,6 +2693,12 @@ async function loadExcelAuditSheet() {
       if (!parsed.length) continue;
 
       excelAuditData = parsed;
+      if (parsed.length > 0) {
+        const firstRecord = parsed[0];
+        const debugMsg = `✓ Loaded ${parsed.length} audit clauses. Example: Outlet="${firstRecord.outlet}" Clause="${firstRecord.clause}" Score="${firstRecord.score}"`;
+        showExcelStatus(debugMsg, 'ok');
+        console.log('loadExcelAuditSheet - Data:', parsed);
+      }
       return;
     } catch (_) { /* try the next candidate tab name */ }
   }
@@ -2633,31 +2711,60 @@ function parseExcelAuditCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
-  // Find columns by exact header match (case-insensitive)
+  // Find columns with better matching logic
   let iOutlet = -1, iClause = -1, iScore = -1, iRemarks = -1;
 
+  // First pass: look for exact column name matches
   for (let i = 0; i < hdrs.length; i++) {
     const h = hdrs[i];
-    if (h.includes('outlet')) iOutlet = i;
-    if (h.includes('audit clause') || h === 'clause') iClause = i;
+    if (h === 'outlet name') iOutlet = i;
+    if (h === 'audit clause' || h === 'audit') iClause = i;
     if (h === 'score') iScore = i;
     if (h === 'remarks') iRemarks = i;
   }
 
+  // Second pass: keyword matching for any that weren't found
+  for (let i = 0; i < hdrs.length; i++) {
+    const h = hdrs[i];
+    if (iOutlet === -1 && (h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+      iOutlet = i;
+    }
+    if (iClause === -1 && (h.includes('audit') || h.includes('clause') || h.includes('checkpoint'))) {
+      iClause = i;
+    }
+    if (iScore === -1 && h.includes('score')) {
+      iScore = i;
+    }
+    if (iRemarks === -1 && (h.includes('remark') || h.includes('comment'))) {
+      iRemarks = i;
+    }
+  }
+
+  console.log('parseExcelAuditCSV - Column indices:', { iOutlet, iClause, iScore, iRemarks });
+
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
-    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
+    // Get outlet name
+    const outlet = iOutlet !== -1 && iOutlet < c.length ? (c[iOutlet] || '').trim() : '';
     if (!outlet) continue;
+
+    // Get data from found columns, or empty string if column not found
+    const clause = iClause !== -1 && iClause < c.length ? (c[iClause] || '').trim() : '';
+    const score = iScore !== -1 && iScore < c.length ? (c[iScore] || '').trim() : '';
+    const remarks = iRemarks !== -1 && iRemarks < c.length ? (c[iRemarks] || '').trim() : '';
+
+    console.log(`parseExcelAuditCSV row ${i}:`, { outlet, clause, score, remarks });
 
     rows.push({
       outlet,
-      clause: iClause !== -1 ? (c[iClause] || '').trim() : '',
-      score: iScore !== -1 ? (c[iScore] || '').trim() : '',
-      remarks: iRemarks !== -1 ? (c[iRemarks] || '').trim() : '',
+      clause,
+      score,
+      remarks,
     });
   }
 
+  console.log('parseExcelAuditCSV - Total rows parsed:', rows.length);
   return rows;
 }
 
