@@ -2577,16 +2577,22 @@ function parseExcelIssuesCSV(text) {
   const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.,]/g, ''));
 
   function col(...names) {
-    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    for (const n of names) {
+      const i = hdrs.indexOf(n);
+      if (i !== -1) return i;
+      // Try fuzzy matching with substring
+      const idx = hdrs.findIndex(h => h.includes(n) || n.includes(h.substring(0, 4)));
+      if (idx !== -1) return idx;
+    }
     return -1;
   }
 
-  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
+  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename', 'storename');
   if (iOutlet === -1) iOutlet = 0;
-  const iIssue    = col('issue', 'issuedescription', 'description', 'observation', 'remarks');
-  const iCategory = col('category', 'type', 'issuetype', 'issuecategory');
-  const iDate     = col('date', 'dateidentified', 'reporteddate');
-  const iStatus   = col('status', 'issuestatus');
+  const iIssue    = col('issue', 'issuedescription', 'description', 'observation', 'remarks', 'issueobservation', 'issuedetail');
+  const iCategory = col('category', 'type', 'issuetype', 'issuecategory', 'issuecategories');
+  const iDate     = col('date', 'dateidentified', 'reporteddate', 'dateofissue', 'issueddate');
+  const iStatus   = col('status', 'issuestatus', 'currentstatus');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
@@ -2634,15 +2640,21 @@ function parseExcelAuditCSV(text) {
   const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.,]/g, ''));
 
   function col(...names) {
-    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    for (const n of names) {
+      const i = hdrs.indexOf(n);
+      if (i !== -1) return i;
+      // Try fuzzy matching with substring
+      const idx = hdrs.findIndex(h => h.includes(n) || n.includes(h.substring(0, 4)));
+      if (idx !== -1) return idx;
+    }
     return -1;
   }
 
   let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
   if (iOutlet === -1) iOutlet = 0;
-  const iClause   = col('auditclause', 'clause', 'observation', 'checkpoint', 'requirement');
-  const iScore    = col('score', 'scorepct', 'scorecard', 'rating', 'status');
-  const iRemarks  = col('remarks', 'comments', 'notes', 'observation');
+  const iClause   = col('auditclause', 'clause', 'observation', 'checkpoint', 'requirement', 'auditpoint', 'checklistpoint');
+  const iScore    = col('score', 'scorepct', 'scorecard', 'rating', 'status', 'scorestatus', 'auditscor');
+  const iRemarks  = col('remarks', 'comments', 'notes', 'observation', 'remark', 'comment');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
