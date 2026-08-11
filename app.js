@@ -17,6 +17,7 @@ let opsScMonths   = [];
 let excelData     = [];
 let excelMonths   = [];
 let excelIssuesData = [];
+let excelAuditData = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -2498,6 +2499,11 @@ const EXCEL_ISSUES_SHEET_NAMES = [
   'Handling Issue', 'Customer Issues', 'Issues',
 ];
 
+const EXCEL_AUDIT_SHEET_NAMES = [
+  'Audit Clause', 'Audit clause', 'audit clause',
+  'AUDIT CLAUSE', 'Audit', 'Audit Clauses', 'Audit clauses',
+];
+
 function showExcelStatus(msg, type) {
   const el = document.getElementById('excelStatus');
   if (!el) return;
@@ -2534,6 +2540,7 @@ async function loadExcelSheet() {
       rebuildExcelFilters();
       applyExcelFilters();
       loadExcelIssuesSheet();
+      loadExcelAuditSheet();
       showExcelStatus('', '');
       return;
     } catch (_) { /* try the next candidate tab name */ }
@@ -2593,6 +2600,61 @@ function parseExcelIssuesCSV(text) {
       category: iCategory !== -1 ? (c[iCategory] || '') : '',
       date: iDate !== -1 ? (c[iDate] || '') : '',
       status: iStatus !== -1 ? (c[iStatus] || '') : '',
+    });
+  }
+
+  return rows;
+}
+
+async function loadExcelAuditSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) return;
+
+  for (const name of EXCEL_AUDIT_SHEET_NAMES) {
+    const csvUrl = toEnrollCSVUrl(raw, name);
+    if (!csvUrl) return;
+    try {
+      const res = await fetch(csvUrl);
+      if (!res.ok) continue;
+      const text = await res.text();
+      const parsed = parseExcelAuditCSV(text);
+      if (!parsed.length) continue;
+
+      excelAuditData = parsed;
+      return;
+    } catch (_) { /* try the next candidate tab name */ }
+  }
+}
+
+function parseExcelAuditCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return [];
+
+  const rawHdrs = allRows[0];
+  const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.,]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
+  if (iOutlet === -1) iOutlet = 0;
+  const iClause   = col('auditclause', 'clause', 'observation', 'checkpoint', 'requirement');
+  const iScore    = col('score', 'scorepct', 'scorecard', 'rating', 'status');
+  const iRemarks  = col('remarks', 'comments', 'notes', 'observation');
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    const outlet = (c[iOutlet] || '').trim();
+    if (!outlet) continue;
+
+    rows.push({
+      outlet,
+      clause: iClause !== -1 ? (c[iClause] || '') : '',
+      score: iScore !== -1 ? (c[iScore] || '') : '',
+      remarks: iRemarks !== -1 ? (c[iRemarks] || '') : '',
     });
   }
 
@@ -2755,11 +2817,13 @@ function toggleExcelIssues(storeName, el) {
   }
 
   const issues = excelIssuesData.filter(issue => issue.outlet === storeName);
+  const audits = excelAuditData.filter(audit => audit.outlet === storeName);
+
   const issuesHtml = issues.length ?
-    `<div style="padding:12px;background:#f9f9f7;border-left:3px solid #7cb342">
-      <div style="font-weight:600;margin-bottom:8px;color:#333">Customer Handling Issues (${issues.length})</div>
+    `<div style="margin-bottom:16px">
+      <div style="font-weight:600;margin-bottom:8px;color:#2a5c14;padding:8px;background:#d4edda;border-radius:3px">📋 Customer Handling Issues (${issues.length})</div>
       ${issues.map(issue => `
-        <div style="margin-bottom:8px;padding:8px;background:#fff;border-radius:3px;border-left:2px solid #7cb342">
+        <div style="margin-bottom:8px;padding:10px;background:#fff;border-radius:3px;border-left:3px solid #7cb342">
           <div><strong>Issue:</strong> ${issue.issue || '-'}</div>
           ${issue.category ? `<div style="font-size:12px;color:#666"><strong>Category:</strong> ${issue.category}</div>` : ''}
           ${issue.date ? `<div style="font-size:12px;color:#666"><strong>Date:</strong> ${issue.date}</div>` : ''}
@@ -2767,13 +2831,40 @@ function toggleExcelIssues(storeName, el) {
         </div>
       `).join('')}
     </div>` :
-    '<div style="padding:12px;background:#f9f9f7;color:#999;font-style:italic">No issues recorded for this store</div>';
+    '<div style="margin-bottom:16px;padding:12px;background:#f9f9f7;color:#999;font-style:italic">No customer handling issues recorded</div>';
+
+  const auditsHtml = audits.length ?
+    `<div>
+      <div style="font-weight:600;margin-bottom:8px;color:#2a5c14;padding:8px;background:#d4edda;border-radius:3px">✅ Audit Clauses (${audits.length})</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#f5f5f5;border-bottom:1px solid #ddd">
+            <th style="padding:8px;text-align:left;border-right:1px solid #ddd"><strong>Audit Clause</strong></th>
+            <th style="padding:8px;text-align:center;width:100px;border-right:1px solid #ddd"><strong>Score</strong></th>
+            <th style="padding:8px;text-align:left"><strong>Remarks</strong></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${audits.map(audit => `
+            <tr style="border-bottom:1px solid #eee">
+              <td style="padding:8px;border-right:1px solid #eee">${audit.clause || '-'}</td>
+              <td style="padding:8px;text-align:center;border-right:1px solid #eee;font-weight:600;color:${
+                audit.score.toLowerCase().includes('average') ? '#854f0b' :
+                audit.score.toLowerCase().includes('not following') ? '#a32d2d' : '#666'
+              }">${audit.score || '-'}</td>
+              <td style="padding:8px">${audit.remarks || '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>` :
+    '<div style="padding:12px;background:#f9f9f7;color:#999;font-style:italic">No audit clauses recorded</div>';
 
   const expandRow = document.createElement('tr');
   expandRow.className = 'excel-issues-row';
   expandRow.dataset.store = storeName;
   const monthCount = el.closest('tr').querySelectorAll('td').length - 3;
-  expandRow.innerHTML = `<td colspan="${monthCount + 3}" style="padding:0;border:none">${issuesHtml}</td>`;
+  expandRow.innerHTML = `<td colspan="${monthCount + 3}" style="padding:16px;border:none;background:#f9f9f7">${issuesHtml}${auditsHtml}</td>`;
   tr.insertAdjacentElement('afterend', expandRow);
 
   el.innerHTML = '▼ ' + storeName;
