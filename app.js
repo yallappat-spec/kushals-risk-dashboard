@@ -2514,14 +2514,18 @@ function showExcelStatus(msg, type) {
 }
 
 async function loadExcelSheet() {
+  console.log('loadExcelSheet() called');
   const raw = document.getElementById('sheetUrl').value.trim();
   if (!raw) {
+    console.log('loadExcelSheet - No sheet URL');
     showExcelStatus('Customer excellence scorecard data requires a Google Sheet. Please load data via the Google Sheet tab first.', 'err');
     return;
   }
+  console.log('loadExcelSheet - Sheet URL found:', raw.substring(0, 60));
   showExcelStatus('Loading customer excellence scorecard data…', '');
 
   for (const name of EXCEL_SHEET_NAMES) {
+    console.log(`loadExcelSheet - Trying sheet: "${name}"`);
     const csvUrl = toEnrollCSVUrl(raw, name);
     if (!csvUrl) return;
     try {
