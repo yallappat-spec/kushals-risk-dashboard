@@ -2602,34 +2602,49 @@ function parseExcelIssuesCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
-  console.log('parseExcelIssuesCSV - Raw headers:', rawHdrs);
-  console.log('parseExcelIssuesCSV - Lowercased headers:', hdrs);
-  console.log('parseExcelIssuesCSV - Total rows to parse:', allRows.length - 1);
-
-  // Find columns by header keywords (more flexible matching)
+  // Find columns: try exact column positions first, then keyword matching
   let iOutlet = -1, iIssue = -1, iCategory = -1, iDate = -1, iStatus = -1;
 
+  // First, try to find by exact position (Google Sheets exports columns in order)
+  // Outlet Name is typically at index 2 (after Month, Year)
   for (let i = 0; i < hdrs.length; i++) {
     const h = hdrs[i];
-    // Match outlet name
-    if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+    // Match outlet name (exact or keyword)
+    if (h === 'outlet name' || (h.includes('outlet') && !h.includes('month'))) {
       iOutlet = i;
+      break;
     }
-    // Match issue column (including audit clause as issue)
-    if (h.includes('issue') || h.includes('observation') || h.includes('description') || h.includes('problem') || h.includes('audit') || h.includes('clause')) {
-      iIssue = i;
+  }
+
+  // If outlet not found by exact match, search by keyword
+  if (iOutlet === -1) {
+    for (let i = 0; i < hdrs.length; i++) {
+      const h = hdrs[i];
+      if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+        iOutlet = i;
+        break;
+      }
     }
-    // Match category column (including stage)
-    if (h.includes('category') || h.includes('type') || h.includes('issuetype') || h.includes('stage')) {
-      iCategory = i;
+  }
+
+  // Find other columns after outlet
+  for (let i = 0; i < hdrs.length; i++) {
+    const h = hdrs[i];
+    // Match issue/audit clause column
+    if (h === 'audit clause' || h === 'audit' || h.includes('audit') || h.includes('clause') || h.includes('issue')) {
+      if (iIssue === -1) iIssue = i;
+    }
+    // Match category/stage column
+    if (h === 'stage' || h.includes('category') || h.includes('type')) {
+      if (iCategory === -1) iCategory = i;
     }
     // Match date column
-    if (h.includes('date') || h.includes('dateidentified')) {
-      iDate = i;
+    if (h.includes('date')) {
+      if (iDate === -1) iDate = i;
     }
-    // Match status column (including score)
-    if (h.includes('status') || h.includes('issuestatus') || h.includes('score')) {
-      iStatus = i;
+    // Match score/status column
+    if (h === 'score' || h.includes('score') || h.includes('status')) {
+      if (iStatus === -1) iStatus = i;
     }
   }
 
@@ -2696,28 +2711,31 @@ function parseExcelAuditCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
-  console.log('parseExcelAuditCSV - Raw headers:', rawHdrs);
-  console.log('parseExcelAuditCSV - Lowercased headers:', hdrs);
-
-  // Find columns by header keywords (more flexible matching)
+  // Find columns with better matching logic
   let iOutlet = -1, iClause = -1, iScore = -1, iRemarks = -1;
 
+  // First pass: look for exact column name matches
   for (let i = 0; i < hdrs.length; i++) {
     const h = hdrs[i];
-    // Match outlet name (skip Month, Year columns)
-    if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+    if (h === 'outlet name') iOutlet = i;
+    if (h === 'audit clause' || h === 'audit') iClause = i;
+    if (h === 'score') iScore = i;
+    if (h === 'remarks') iRemarks = i;
+  }
+
+  // Second pass: keyword matching for any that weren't found
+  for (let i = 0; i < hdrs.length; i++) {
+    const h = hdrs[i];
+    if (iOutlet === -1 && (h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
       iOutlet = i;
     }
-    // Match audit clause column
-    if (h.includes('audit') || h.includes('clause') || h.includes('checkpoint')) {
+    if (iClause === -1 && (h.includes('audit') || h.includes('clause') || h.includes('checkpoint'))) {
       iClause = i;
     }
-    // Match score column (exact or contains)
-    if (h === 'score' || h.includes('score')) {
+    if (iScore === -1 && h.includes('score')) {
       iScore = i;
     }
-    // Match remarks column
-    if (h === 'remarks' || h.includes('remark') || h === 'comment' || h.includes('comment')) {
+    if (iRemarks === -1 && (h.includes('remark') || h.includes('comment'))) {
       iRemarks = i;
     }
   }
