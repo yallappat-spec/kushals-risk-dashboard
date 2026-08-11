@@ -2576,30 +2576,52 @@ function parseExcelIssuesCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
-  // Find columns by substring match (case-insensitive)
+  // Find columns by header keywords (more flexible matching)
   let iOutlet = -1, iIssue = -1, iCategory = -1, iDate = -1, iStatus = -1;
 
   for (let i = 0; i < hdrs.length; i++) {
     const h = hdrs[i];
-    if (h.includes('outlet')) iOutlet = i;
-    if (h.includes('issue') || h.includes('observation') || h.includes('description')) iIssue = i;
-    if (h.includes('category') || h.includes('type')) iCategory = i;
-    if (h.includes('date')) iDate = i;
-    if (h.includes('status')) iStatus = i;
+    // Match outlet name
+    if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+      iOutlet = i;
+    }
+    // Match issue column
+    if (h.includes('issue') || h.includes('observation') || h.includes('description') || h.includes('problem')) {
+      iIssue = i;
+    }
+    // Match category column
+    if (h.includes('category') || h.includes('type') || h.includes('issuetype')) {
+      iCategory = i;
+    }
+    // Match date column
+    if (h.includes('date') || h.includes('dateidentified')) {
+      iDate = i;
+    }
+    // Match status column
+    if (h.includes('status') || h.includes('issuestatus')) {
+      iStatus = i;
+    }
   }
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
-    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
+    // Get outlet name
+    const outlet = iOutlet !== -1 && iOutlet < c.length ? (c[iOutlet] || '').trim() : '';
     if (!outlet) continue;
+
+    // Get data from found columns, or empty string if column not found
+    const issue = iIssue !== -1 && iIssue < c.length ? (c[iIssue] || '').trim() : '';
+    const category = iCategory !== -1 && iCategory < c.length ? (c[iCategory] || '').trim() : '';
+    const date = iDate !== -1 && iDate < c.length ? (c[iDate] || '').trim() : '';
+    const status = iStatus !== -1 && iStatus < c.length ? (c[iStatus] || '').trim() : '';
 
     rows.push({
       outlet,
-      issue: iIssue !== -1 ? (c[iIssue] || '').trim() : '',
-      category: iCategory !== -1 ? (c[iCategory] || '').trim() : '',
-      date: iDate !== -1 ? (c[iDate] || '').trim() : '',
-      status: iStatus !== -1 ? (c[iStatus] || '').trim() : '',
+      issue,
+      category,
+      date,
+      status,
     });
   }
 
@@ -2633,28 +2655,46 @@ function parseExcelAuditCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
-  // Find columns by exact header match (case-insensitive)
+  // Find columns by header keywords (more flexible matching)
   let iOutlet = -1, iClause = -1, iScore = -1, iRemarks = -1;
 
   for (let i = 0; i < hdrs.length; i++) {
     const h = hdrs[i];
-    if (h.includes('outlet')) iOutlet = i;
-    if (h.includes('audit clause') || h === 'clause') iClause = i;
-    if (h === 'score') iScore = i;
-    if (h === 'remarks') iRemarks = i;
+    // Match outlet name (skip Month, Year columns)
+    if ((h.includes('outlet') || h.includes('store')) && !h.includes('month') && !h.includes('year')) {
+      iOutlet = i;
+    }
+    // Match audit clause column
+    if (h.includes('audit') || h.includes('clause') || h.includes('checkpoint')) {
+      iClause = i;
+    }
+    // Match score column (exact or contains)
+    if (h === 'score' || h.includes('score')) {
+      iScore = i;
+    }
+    // Match remarks column
+    if (h === 'remarks' || h.includes('remark') || h === 'comment' || h.includes('comment')) {
+      iRemarks = i;
+    }
   }
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
-    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
+    // Get outlet name
+    const outlet = iOutlet !== -1 && iOutlet < c.length ? (c[iOutlet] || '').trim() : '';
     if (!outlet) continue;
+
+    // Get data from found columns, or empty string if column not found
+    const clause = iClause !== -1 && iClause < c.length ? (c[iClause] || '').trim() : '';
+    const score = iScore !== -1 && iScore < c.length ? (c[iScore] || '').trim() : '';
+    const remarks = iRemarks !== -1 && iRemarks < c.length ? (c[iRemarks] || '').trim() : '';
 
     rows.push({
       outlet,
-      clause: iClause !== -1 ? (c[iClause] || '').trim() : '',
-      score: iScore !== -1 ? (c[iScore] || '').trim() : '',
-      remarks: iRemarks !== -1 ? (c[iRemarks] || '').trim() : '',
+      clause,
+      score,
+      remarks,
     });
   }
 
