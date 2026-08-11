@@ -2572,7 +2572,10 @@ async function loadExcelIssuesSheet() {
         continue;
       }
       const text = await res.text();
-      console.log(`loadExcelIssuesSheet - "${name}" loaded, CSV length: ${text.length}, first 200 chars:`, text.substring(0, 200));
+      console.log(`loadExcelIssuesSheet - "${name}" loaded, CSV length: ${text.length}`);
+      const lines = text.split('\n');
+      console.log(`loadExcelIssuesSheet - CSV headers (row 0):`, lines[0]);
+      if (lines[1]) console.log(`loadExcelIssuesSheet - First data row (row 1):`, lines[1]);
       const parsed = parseExcelIssuesCSV(text);
       console.log(`loadExcelIssuesSheet - "${name}" parsed, got ${parsed.length} rows`);
       if (!parsed.length) continue;
@@ -2599,6 +2602,7 @@ function parseExcelIssuesCSV(text) {
 
   console.log('parseExcelIssuesCSV - Raw headers:', rawHdrs);
   console.log('parseExcelIssuesCSV - Lowercased headers:', hdrs);
+  console.log('parseExcelIssuesCSV - Total rows to parse:', allRows.length - 1);
 
   // Find columns by header keywords (more flexible matching)
   let iOutlet = -1, iIssue = -1, iCategory = -1, iDate = -1, iStatus = -1;
