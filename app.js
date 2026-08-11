@@ -16,6 +16,7 @@ let opsScData     = [];
 let opsScMonths   = [];
 let excelData     = [];
 let excelMonths   = [];
+let excelIssuesData = [];
 let shortageHeaders = [];
 let shortageColIdx  = { iItemName: -1, iStkVal: -1, iAdjQty: -1 };
 let bChart = null;
@@ -2491,6 +2492,12 @@ const EXCEL_SHEET_NAMES = [
   'Excellence Scorecard', 'Excellence scorecard',
 ];
 
+const EXCEL_ISSUES_SHEET_NAMES = [
+  'Customer Handling Issue', 'Customer handling issue',
+  'customer handling issue', 'CUSTOMER HANDLING ISSUE',
+  'Handling Issue', 'Customer Issues', 'Issues',
+];
+
 function showExcelStatus(msg, type) {
   const el = document.getElementById('excelStatus');
   if (!el) return;
@@ -2526,12 +2533,70 @@ async function loadExcelSheet() {
       }));
       rebuildExcelFilters();
       applyExcelFilters();
+      loadExcelIssuesSheet();
       showExcelStatus('', '');
       return;
     } catch (_) { /* try the next candidate tab name */ }
   }
   showExcelStatus('&#10007; Could not find a "Customer Excellence Scorecard" tab in the Google Sheet. ' +
     'Please check the tab name (tried: ' + EXCEL_SHEET_NAMES.slice(0, 3).join(', ') + '…).', 'err');
+}
+
+async function loadExcelIssuesSheet() {
+  const raw = document.getElementById('sheetUrl').value.trim();
+  if (!raw) return;
+
+  for (const name of EXCEL_ISSUES_SHEET_NAMES) {
+    const csvUrl = toEnrollCSVUrl(raw, name);
+    if (!csvUrl) return;
+    try {
+      const res = await fetch(csvUrl);
+      if (!res.ok) continue;
+      const text = await res.text();
+      const parsed = parseExcelIssuesCSV(text);
+      if (!parsed.length) continue;
+
+      excelIssuesData = parsed;
+      return;
+    } catch (_) { /* try the next candidate tab name */ }
+  }
+}
+
+function parseExcelIssuesCSV(text) {
+  const allRows = parseFullCSV(text);
+  if (allRows.length < 2) return [];
+
+  const rawHdrs = allRows[0];
+  const hdrs = rawHdrs.map(h => h.toLowerCase().replace(/[\s%.,]/g, ''));
+
+  function col(...names) {
+    for (const n of names) { const i = hdrs.indexOf(n); if (i !== -1) return i; }
+    return -1;
+  }
+
+  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
+  if (iOutlet === -1) iOutlet = 0;
+  const iIssue    = col('issue', 'issuedescription', 'description', 'observation', 'remarks');
+  const iCategory = col('category', 'type', 'issuetype', 'issuecategory');
+  const iDate     = col('date', 'dateidentified', 'reporteddate');
+  const iStatus   = col('status', 'issuestatus');
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const c = allRows[i];
+    const outlet = (c[iOutlet] || '').trim();
+    if (!outlet) continue;
+
+    rows.push({
+      outlet,
+      issue: iIssue !== -1 ? (c[iIssue] || '') : '',
+      category: iCategory !== -1 ? (c[iCategory] || '') : '',
+      date: iDate !== -1 ? (c[iDate] || '') : '',
+      status: iStatus !== -1 ? (c[iStatus] || '') : '',
+    });
+  }
+
+  return rows;
 }
 
 function excelScNum(raw) {
@@ -2678,6 +2743,43 @@ function getScoreColor(value) {
   return `background:${excelScColor(value)}22;color:${excelScColor(value)};font-weight:600;`;
 }
 
+function toggleExcelIssues(storeName, el) {
+  const tr = el.closest('tr');
+  const next = tr.nextElementSibling;
+
+  if (next && next.classList.contains('excel-issues-row') && next.dataset.store === storeName) {
+    next.remove();
+    el.innerHTML = '▶ ' + storeName;
+    el.classList.remove('store-link-open');
+    return;
+  }
+
+  const issues = excelIssuesData.filter(issue => issue.outlet === storeName);
+  const issuesHtml = issues.length ?
+    `<div style="padding:12px;background:#f9f9f7;border-left:3px solid #7cb342">
+      <div style="font-weight:600;margin-bottom:8px;color:#333">Customer Handling Issues (${issues.length})</div>
+      ${issues.map(issue => `
+        <div style="margin-bottom:8px;padding:8px;background:#fff;border-radius:3px;border-left:2px solid #7cb342">
+          <div><strong>Issue:</strong> ${issue.issue || '-'}</div>
+          ${issue.category ? `<div style="font-size:12px;color:#666"><strong>Category:</strong> ${issue.category}</div>` : ''}
+          ${issue.date ? `<div style="font-size:12px;color:#666"><strong>Date:</strong> ${issue.date}</div>` : ''}
+          ${issue.status ? `<div style="font-size:12px;color:#666"><strong>Status:</strong> ${issue.status}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>` :
+    '<div style="padding:12px;background:#f9f9f7;color:#999;font-style:italic">No issues recorded for this store</div>';
+
+  const expandRow = document.createElement('tr');
+  expandRow.className = 'excel-issues-row';
+  expandRow.dataset.store = storeName;
+  const monthCount = el.closest('tr').querySelectorAll('td').length - 3;
+  expandRow.innerHTML = `<td colspan="${monthCount + 3}" style="padding:0;border:none">${issuesHtml}</td>`;
+  tr.insertAdjacentElement('afterend', expandRow);
+
+  el.innerHTML = '▼ ' + storeName;
+  el.classList.add('store-link-open');
+}
+
 function renderExcelTable(data) {
   const headRow = document.getElementById('excelHeadRow');
   const body = document.getElementById('excelBody');
@@ -2695,7 +2797,7 @@ function renderExcelTable(data) {
   /* Build rows */
   body.innerHTML = data.map(r => {
     const cells = [
-      `<td>${r.outlet}</td>`,
+      `<td><span class="store-link" onclick="toggleExcelIssues('${r.outlet.replace(/'/g, "\\'")}', this)" style="cursor:pointer;color:#0066cc;text-decoration:underline">▶ ${r.outlet}</span></td>`,
       `<td>${r.cm || '-'}</td>`,
       `<td>${r.rm || '-'}</td>`,
       ...months.map(m => {
