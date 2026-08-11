@@ -2712,7 +2712,7 @@ function parseExcelAuditCSV(text) {
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
   // Find columns with better matching logic
-  let iOutlet = -1, iClause = -1, iScore = -1, iRemarks = -1;
+  let iOutlet = -1, iClause = -1, iScore = -1, iRemarks = -1, iMonth = -1, iYear = -1;
 
   // First pass: look for exact column name matches
   for (let i = 0; i < hdrs.length; i++) {
@@ -2721,6 +2721,8 @@ function parseExcelAuditCSV(text) {
     if (h === 'audit clause' || h === 'audit') iClause = i;
     if (h === 'score') iScore = i;
     if (h === 'remarks') iRemarks = i;
+    if (h === 'month') iMonth = i;
+    if (h === 'year') iYear = i;
   }
 
   // Second pass: keyword matching for any that weren't found
@@ -2738,9 +2740,15 @@ function parseExcelAuditCSV(text) {
     if (iRemarks === -1 && (h.includes('remark') || h.includes('comment'))) {
       iRemarks = i;
     }
+    if (iMonth === -1 && h === 'month') {
+      iMonth = i;
+    }
+    if (iYear === -1 && h === 'year') {
+      iYear = i;
+    }
   }
 
-  console.log('parseExcelAuditCSV - Column indices:', { iOutlet, iClause, iScore, iRemarks });
+  console.log('parseExcelAuditCSV - Column indices:', { iOutlet, iClause, iScore, iRemarks, iMonth, iYear });
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
@@ -2753,14 +2761,18 @@ function parseExcelAuditCSV(text) {
     const clause = iClause !== -1 && iClause < c.length ? (c[iClause] || '').trim() : '';
     const score = iScore !== -1 && iScore < c.length ? (c[iScore] || '').trim() : '';
     const remarks = iRemarks !== -1 && iRemarks < c.length ? (c[iRemarks] || '').trim() : '';
+    const month = iMonth !== -1 && iMonth < c.length ? (c[iMonth] || '').trim() : '';
+    const year = iYear !== -1 && iYear < c.length ? (c[iYear] || '').trim() : '';
+    const date = month || year ? `${month} ${year}`.trim() : '';
 
-    console.log(`parseExcelAuditCSV row ${i}:`, { outlet, clause, score, remarks });
+    console.log(`parseExcelAuditCSV row ${i}:`, { outlet, clause, score, remarks, date });
 
     rows.push({
       outlet,
       clause,
       score,
       remarks,
+      date,
     });
   }
 
@@ -2947,7 +2959,8 @@ function toggleExcelIssues(storeName, el) {
         <thead>
           <tr style="background:#f5f5f5;border-bottom:1px solid #ddd">
             <th style="padding:8px;text-align:left;border-right:1px solid #ddd"><strong>Audit Clause</strong></th>
-            <th style="padding:8px;text-align:center;width:100px;border-right:1px solid #ddd"><strong>Score</strong></th>
+            <th style="padding:8px;text-align:center;width:80px;border-right:1px solid #ddd"><strong>Score</strong></th>
+            <th style="padding:8px;text-align:center;width:80px;border-right:1px solid #ddd"><strong>Month</strong></th>
             <th style="padding:8px;text-align:left"><strong>Remarks</strong></th>
           </tr>
         </thead>
@@ -2959,6 +2972,7 @@ function toggleExcelIssues(storeName, el) {
                 audit.score.toLowerCase().includes('average') ? '#854f0b' :
                 audit.score.toLowerCase().includes('not following') ? '#a32d2d' : '#666'
               }">${audit.score || '-'}</td>
+              <td style="padding:8px;text-align:center;border-right:1px solid #eee;font-size:11px;color:#666">${audit.date || '-'}</td>
               <td style="padding:8px">${audit.remarks || '-'}</td>
             </tr>
           `).join('')}
