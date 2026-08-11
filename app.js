@@ -2580,32 +2580,28 @@ function parseExcelIssuesCSV(text) {
     for (const n of names) {
       const i = hdrs.indexOf(n);
       if (i !== -1) return i;
-      // Try fuzzy matching with substring
-      const idx = hdrs.findIndex(h => h.includes(n) || n.includes(h.substring(0, 4)));
-      if (idx !== -1) return idx;
     }
     return -1;
   }
 
-  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename', 'storename');
-  if (iOutlet === -1) iOutlet = 0;
-  const iIssue    = col('issue', 'issuedescription', 'description', 'observation', 'remarks', 'issueobservation', 'issuedetail');
-  const iCategory = col('category', 'type', 'issuetype', 'issuecategory', 'issuecategories');
-  const iDate     = col('date', 'dateidentified', 'reporteddate', 'dateofissue', 'issueddate');
-  const iStatus   = col('status', 'issuestatus', 'currentstatus');
+  const iOutlet   = col('outletname', 'outlet', 'storename', 'store');
+  const iIssue    = col('issue', 'issueobservation', 'issuedescription', 'description');
+  const iCategory = col('category', 'issuecategory', 'type');
+  const iDate     = col('date', 'dateidentified', 'reporteddate');
+  const iStatus   = col('status', 'issuestatus');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
-    const outlet = (c[iOutlet] || '').trim();
+    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
     if (!outlet) continue;
 
     rows.push({
       outlet,
-      issue: iIssue !== -1 ? (c[iIssue] || '') : '',
-      category: iCategory !== -1 ? (c[iCategory] || '') : '',
-      date: iDate !== -1 ? (c[iDate] || '') : '',
-      status: iStatus !== -1 ? (c[iStatus] || '') : '',
+      issue: iIssue !== -1 ? (c[iIssue] || '').trim() : '',
+      category: iCategory !== -1 ? (c[iCategory] || '').trim() : '',
+      date: iDate !== -1 ? (c[iDate] || '').trim() : '',
+      status: iStatus !== -1 ? (c[iStatus] || '').trim() : '',
     });
   }
 
@@ -2643,30 +2639,26 @@ function parseExcelAuditCSV(text) {
     for (const n of names) {
       const i = hdrs.indexOf(n);
       if (i !== -1) return i;
-      // Try fuzzy matching with substring
-      const idx = hdrs.findIndex(h => h.includes(n) || n.includes(h.substring(0, 4)));
-      if (idx !== -1) return idx;
     }
     return -1;
   }
 
-  let iOutlet = col('outletname', 'outlet', 'outlets', 'store', 'storename');
-  if (iOutlet === -1) iOutlet = 0;
-  const iClause   = col('auditclause', 'clause', 'observation', 'checkpoint', 'requirement', 'auditpoint', 'checklistpoint');
-  const iScore    = col('score', 'scorepct', 'scorecard', 'rating', 'status', 'scorestatus', 'auditscor');
-  const iRemarks  = col('remarks', 'comments', 'notes', 'observation', 'remark', 'comment');
+  const iOutlet   = col('outletname', 'outlet', 'storename', 'store');
+  const iClause   = col('auditclause', 'clause', 'auditpoint', 'checkpoint');
+  const iScore    = col('score', 'scorepct', 'auditscor', 'rating');
+  const iRemarks  = col('remarks', 'remark', 'comments', 'comment');
 
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
-    const outlet = (c[iOutlet] || '').trim();
+    const outlet = iOutlet !== -1 ? (c[iOutlet] || '').trim() : '';
     if (!outlet) continue;
 
     rows.push({
       outlet,
-      clause: iClause !== -1 ? (c[iClause] || '') : '',
-      score: iScore !== -1 ? (c[iScore] || '') : '',
-      remarks: iRemarks !== -1 ? (c[iRemarks] || '') : '',
+      clause: iClause !== -1 ? (c[iClause] || '').trim() : '',
+      score: iScore !== -1 ? (c[iScore] || '').trim() : '',
+      remarks: iRemarks !== -1 ? (c[iRemarks] || '').trim() : '',
     });
   }
 
