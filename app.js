@@ -2579,6 +2579,9 @@ async function loadExcelIssuesSheet() {
 
       excelIssuesData = parsed;
       console.log('loadExcelIssuesSheet - Data loaded successfully:', excelIssuesData);
+      if (parsed.length > 0) {
+        alert(`Loaded ${parsed.length} customer handling issues. First record: ${JSON.stringify(parsed[0])}`);
+      }
       return;
     } catch (err) {
       console.log(`loadExcelIssuesSheet - "${name}" error:`, err.message);
