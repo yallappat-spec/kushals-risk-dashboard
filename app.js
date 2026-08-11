@@ -2578,6 +2578,9 @@ function parseExcelIssuesCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
+  console.log('parseExcelIssuesCSV - Raw headers:', rawHdrs);
+  console.log('parseExcelIssuesCSV - Lowercased headers:', hdrs);
+
   // Find columns by header keywords (more flexible matching)
   let iOutlet = -1, iIssue = -1, iCategory = -1, iDate = -1, iStatus = -1;
 
@@ -2605,6 +2608,8 @@ function parseExcelIssuesCSV(text) {
     }
   }
 
+  console.log('parseExcelIssuesCSV - Column indices:', { iOutlet, iIssue, iCategory, iDate, iStatus });
+
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
@@ -2618,6 +2623,8 @@ function parseExcelIssuesCSV(text) {
     const date = iDate !== -1 && iDate < c.length ? (c[iDate] || '').trim() : '';
     const status = iStatus !== -1 && iStatus < c.length ? (c[iStatus] || '').trim() : '';
 
+    console.log(`parseExcelIssuesCSV row ${i}:`, { outlet, issue, category, date, status });
+
     rows.push({
       outlet,
       issue,
@@ -2627,6 +2634,7 @@ function parseExcelIssuesCSV(text) {
     });
   }
 
+  console.log('parseExcelIssuesCSV - Total rows parsed:', rows.length);
   return rows;
 }
 
@@ -2657,6 +2665,9 @@ function parseExcelAuditCSV(text) {
   const rawHdrs = allRows[0];
   const hdrs = rawHdrs.map(h => h.toLowerCase().trim());
 
+  console.log('parseExcelAuditCSV - Raw headers:', rawHdrs);
+  console.log('parseExcelAuditCSV - Lowercased headers:', hdrs);
+
   // Find columns by header keywords (more flexible matching)
   let iOutlet = -1, iClause = -1, iScore = -1, iRemarks = -1;
 
@@ -2680,6 +2691,8 @@ function parseExcelAuditCSV(text) {
     }
   }
 
+  console.log('parseExcelAuditCSV - Column indices:', { iOutlet, iClause, iScore, iRemarks });
+
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const c = allRows[i];
@@ -2692,6 +2705,8 @@ function parseExcelAuditCSV(text) {
     const score = iScore !== -1 && iScore < c.length ? (c[iScore] || '').trim() : '';
     const remarks = iRemarks !== -1 && iRemarks < c.length ? (c[iRemarks] || '').trim() : '';
 
+    console.log(`parseExcelAuditCSV row ${i}:`, { outlet, clause, score, remarks });
+
     rows.push({
       outlet,
       clause,
@@ -2700,6 +2715,7 @@ function parseExcelAuditCSV(text) {
     });
   }
 
+  console.log('parseExcelAuditCSV - Total rows parsed:', rows.length);
   return rows;
 }
 
