@@ -1253,6 +1253,14 @@ function getFilteredShrinkage() {
       if (pctF === 'lt015' && v >= -0.15)  return false;
     }
     return true;
+  }).sort((a, b) => {
+    /* Ascending shrinkage %: most negative (worst) first, blanks last */
+    const av = parseFloat(a.shrPct), bv = parseFloat(b.shrPct);
+    const aNum = !isNaN(av), bNum = !isNaN(bv);
+    if (!aNum && !bNum) return 0;
+    if (!aNum) return 1;
+    if (!bNum) return -1;
+    return av - bv;
   });
 }
 
